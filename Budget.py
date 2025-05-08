@@ -5,9 +5,14 @@ import pandas as pd
 st.set_page_config(page_title="Budget Tool — Streamlit Native", layout="wide")
 st.title("📊 Budget Tool — Versión Nativa de Streamlit — App Independiente")
 
-# 1️⃣ Meses del año\ nmonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+# 1️⃣ Meses del año
+months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+]
 
-# 2️⃣ Estructura de inputs agrupada por sección\ ninput_structure = {
+# 2️⃣ Estructura de inputs agrupada por sección
+input_structure = {
     "INBOUND ACTIVITY": [
         "Inbound Client Volume ForeCast",
         "Inbound Client AHT ForeCast",
@@ -145,26 +150,26 @@ st.title("📊 Budget Tool — Versión Nativa de Streamlit — App Independient
 
 # 3️⃣ Inicializar inputs
 all_inputs = {lbl: [0.0]*len(months) for labels in input_structure.values() for lbl in labels}
-# Para valores únicos (no mes a mes), creamos un único índice 'Value'
 single_inputs = {}
 
-# 4️⃣ UI: Solicitar valores
-for section, labels in input_structure.items():
+# 4️⃣ Solicitar valores\ nfor section, labels in input_structure.items():
     st.header(section)
     if labels:
-        # Identificar si section es single-value o monthly
         is_single = section in ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
-        for lbl in labels:
-            if is_single:
-                # Input único
-                single_inputs[lbl] = st.number_input(f"{lbl}", value=0.0, key=f"single_{lbl}")
-            else:
-                # Inputs mensuales en tabla
-                cols = st.columns(len(months)+1)
-                cols[0].write(lbl)
+        if is_single:
+            for lbl in labels:
+                single_inputs[lbl] = st.number_input(lbl, value=0.0, key=f"single_{lbl}")
+        else:
+            cols = st.columns(len(months)+1)
+            cols[0].write("**Item**")
+            for idx, mes in enumerate(months):
+                cols[idx+1].write(f"**{mes}**")
+            for lbl in labels:
+                row_cols = st.columns(len(months)+1)
+                row_cols[0].write(lbl)
                 for i, mes in enumerate(months):
                     key = f"inp_{lbl}_{mes}"
-                    val = cols[i+1].number_input(label=mes, value=all_inputs[lbl][i], key=key)
+                    val = row_cols[i+1].number_input(label=mes, value=all_inputs[lbl][i], key=key)
                     all_inputs[lbl][i] = val
     else:
         st.write("_(Sin campos de entrada)_")
@@ -172,7 +177,7 @@ for section, labels in input_structure.items():
 # 5️⃣ DataFrame de inputs mensuales
 df = pd.DataFrame(all_inputs, index=months)
 
-# 6️⃣ Definir todas las métricas calculadas dinámicamente
+# 6️⃣ Métricas calculadas dinámicamente
 metrics = []
 # Inbound
 metrics += [
@@ -202,23 +207,23 @@ metrics += [
 ]
 # Email
 metrics += [
-    ("EMAIL TRANSACTIONAL HOURS", lambda df,i: df.at[months[i], "Email Volume Handled"] * (3600/ df.at[months[i], "Email AHT (Sec)"]) / 3600),
+    ("EMAIL TRANSACTIONAL HOURS", lambda df,i: df.at[months[i], "Email Volume Handled"] * (3600 / df.at[months[i], "Email AHT (Sec)"]) / 3600),
     ("EMAIL PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Email Volume Handled"])
 ]
 # Chat
 metrics += [
-    ("CHAT TRANSACTIONAL HOURS", lambda df,i: (df.at[months[i], "Chat Volume Forecast"] * df.at[months[i], "Chat AHT"] /3600) / df.at[months[i], "Chat Concurrency"]),
+    ("CHAT TRANSACTIONAL HOURS", lambda df,i: (df.at[months[i], "Chat Volume Forecast"] * df.at[months[i], "Chat AHT"] / 3600) / df.at[months[i], "Chat Concurrency"]),
     ("CHAT PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Chat Handled"])
 ]
 # Social Media
 metrics += [
-    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda df,i: (df.at[months[i], "S. Media Volume Forecast"] * df.at[months[i], "S. Media AHT"] /3600) / df.at[months[i], "S. Media Concurrency"]),
+    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda df,i: (df.at[months[i], "S. Media Volume Forecast"] * df.at[months[i], "S. Media AHT"] / 3600) / df.at[months[i], "S. Media Concurrency"]),
     ("SOCIAL MEDIA PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "S. Media Handled"])
 ]
 # Totales
 metrics += [
-    ("TOTAL TRANSACTIONAL HOURS", lambda df,i: sum(df.at[months[i], col] for col, _ in metrics if "TRANSACTIONAL" in col)),
-    ("TOTAL PRODUCTIVE HOURS", lambda df,i: sum(df.at[months[i], col] for col, _ in metrics if "PRODUCTIVE" in col))
+    ("TOTAL TRANSACTIONAL HOURS", lambda df,i: sum(df.at[months[i], col] for col, _ in metrics if "TRANSACTIONAL" in col.upper())),
+    ("TOTAL PRODUCTIVE HOURS", lambda df,i: sum(df.at[months[i], col] for col, _ in metrics if "PRODUCTIVE" in col.upper()))
 ]
 # Shrinkages
 metrics += [
@@ -226,17 +231,20 @@ metrics += [
     ("OutOffice Shrinkage (Hr)", lambda df,i: sum(df.at[months[i], f] for f in input_structure["OUT OFFICE SHRINKAGE"]))
 ]
 
-# 7️⃣ Inicializar columnas de resultados\ nfor label, _ in metrics:
+# 7️⃣ Inicializar columnas de resultados
+for label, _ in metrics:
     df[label] = 0.0
 
-# 8️⃣ Calcular métricas\ nfor i in range(len(months)):
+# 8️⃣ Calcular métricas
+for i in range(len(months)):
     for label, func in metrics:
         try:
             df.at[months[i], label] = func(df, i)
         except:
             df.at[months[i], label] = 0
 
-# 9️⃣ Mostrar resultados\ nst.markdown("---")
+# 9️⃣ Mostrar resultados
+st.markdown("---")
 st.header("📈 Resultados Computados")
 st.dataframe(df, use_container_width=True)
 
@@ -247,7 +255,8 @@ if single_inputs:
     for k, v in single_inputs.items():
         st.write(f"- **{k}:** {v}")
 
-# 🏷️ Exportar CSV\ nif st.button("📥 Descargar CSV"):
+# 🏷️ Exportar CSV
+if st.button("📥 Descargar CSV"):
     csv = df.to_csv(index_label="Month").encode('utf-8')
     st.download_button(label="Descargar CSV", data=csv, file_name='budget_results.csv', mime='text/csv')
 
