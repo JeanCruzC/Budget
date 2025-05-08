@@ -199,16 +199,6 @@ for section, labels in input_structure.items():
                 key = f"inp_{lbl}_{mes}"
                 val = row[i+1].number_input(label="", value=all_inputs[lbl][i], key=key)
                 all_inputs[lbl][i] = val
-        # Filas de métricas calculadas para esta sección
-        comp_labels = def_section_metrics.get(section, [])
-        if comp_labels:
-            st.write("")  # espacio
-            for cl in comp_labels:
-                row = st.columns(len(months)+1)
-                row[0].write(f"**{cl}**")
-                for i, mes in enumerate(months):
-                    val = df.at[mes, cl]
-                    row[i+1].write(f"{val:,.2f}")
 
 # --- 5️⃣ Construir DataFrame de inputs mensuales ---
 df = pd.DataFrame(all_inputs, index=months)
@@ -272,7 +262,34 @@ metrics += [
 for name, func in metrics:
     df[name] = df.apply(func, axis=1)
 
-# --- 7️⃣ Mostrar resultados en UI por sección ---
+# --- 6.1️⃣ Mostrar métricas calculadas por sección justo después de inputs ---
+for section, labels in def_section_metrics.items():
+    if not labels or section not in input_structure:
+        continue
+    st.markdown("---")
+    st.subheader(f"{section} — Calculados")
+    # Header de meses
+    cols = st.columns(len(months)+1)
+    cols[0].write("**Metric**")
+    for i, mes in enumerate(months):
+        cols[i+1].write(f"**{mes}**")
+    # Filas de métricas
+    for lbl in labels:
+        row = st.columns(len(months)+1)
+        row[0].write(lbl)
+        for i, mes in enumerate(months):
+            val = df.at[mes, lbl]
+            row[i+1].write(f"{val:,.2f}")
+
+# --- 7️⃣ Mostrar resultados en UI por sección (antiguo, opcional de dejar) ---
+# (Este bloque podría eliminarse si ya no se necesita)
+# for section, labels in input_structure.items():
+#     if section in def_section_metrics and def_section_metrics[section]:
+#         st.markdown("---")
+#         st.subheader(f"{section} — Calculados")
+#         df_section = df[def_section_metrics[section]].copy()
+#         df_section.index.name = "Month"
+#         st.dataframe(df_section, use_container_width=True)
 # Definir métricas por sección para mostrar inline
 def_section_metrics = {
     "INBOUND ACTIVITY": [
