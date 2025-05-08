@@ -131,11 +131,16 @@ def calculate_metrics(data):
     metrics['chat_volume_forecast'] = 0  # Default value
     metrics['chat_offered'] = metrics['chat_volume_forecast']
     metrics['chat_handled'] = metrics['chat_volume_forecast']
-    metrics['chat_concurrency'] = 0.00  # Default value
+    metrics['chat_concurrency'] = 1.00  # Changed from 0.00 to 1.00 to prevent division by zero
     metrics['chat_aht'] = 0  # Default value
     metrics['chat_nda'] = 0.00  # Default value
     metrics['chat_pocc'] = 0.00  # Default value
     metrics['chat_availtime'] = 0  # Default value
+    
+    # Prevent division by zero in chat transactional hours calculation
+    if metrics['chat_concurrency'] == 0:
+        metrics['chat_concurrency'] = 1.00  # Fallback value
+    
     metrics['chat_transactional_hours'] = (metrics['chat_handled'] * metrics['chat_aht'] / 3600) / metrics['chat_concurrency']
     metrics['chat_productive_hours'] = metrics['chat_availtime'] / 68.63  # Fixed value
     
