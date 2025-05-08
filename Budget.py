@@ -150,6 +150,35 @@ all_inputs = {label: [0.0]*len(months) for labels in input_structure.values() fo
 single_inputs = {}
 single_sections = ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
 
+# Definir métricas por sección para mostrar inline antes de renderizar inputs
+# (se usan luego para imprimir cálculos bajo cada sección)
+def_section_metrics = {
+    "INBOUND ACTIVITY": [
+        "Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)",
+        "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS"
+    ],
+    "OUTGOING ACTIVITY": [
+        "Outgoing Generation %", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS"
+    ],
+    "OUTBOUND ACTIVITY": [
+        "Outbound Closed records", "OUTBOUND TRANSACTIONAL HOURS", "OUTBOUND PRODUCTIVE HOURS"
+    ],
+    "BACKOFFICE ACTIVITY": [
+        "Backoffice Generation %", "BACKOFFICE TRANSACTIONAL HOURS", "BACKOFFICE PRODUCTIVE HOURS"
+    ],
+    "EMAIL ACTIVITY": [
+        "EMAIL TRANSACTIONAL HOURS", "EMAIL PRODUCTIVE HOURS"
+    ],
+    "CHAT ACTIVITY": [
+        "CHAT TRANSACTIONAL HOURS", "CHAT PRODUCTIVE HOURS"
+    ],
+    "SOCIAL MEDIA": [
+        "SOCIAL MEDIA TRANSACTIONAL HOURS", "SOCIAL MEDIA PRODUCTIVE HOURS"
+    ],
+    # Shrinkages y totales opcionales
+    "": []
+}
+
 # --- 4️⃣ Renderizar inputs en la UI ---
 for section, labels in input_structure.items():
     st.subheader(section)
