@@ -109,26 +109,24 @@ input_structure = {
     ]
 }
 
-# Secciones con valores únicos (sin dimensión mensual)
+# Secciones sin dimensión mensual
 single_sections = ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
 
-# --- 3️⃣ Inicializar diccionarios de inputs ---
+# --- 3️⃣ Inicializar inputs ---
 all_inputs = {label: [0.0] * len(months) for sect in input_structure.values() for label in sect}
 single_inputs = {}
 
-# --- 4️⃣ Renderizar panel de entradas ---
+# --- 4️⃣ Renderizar entradas ---
 for section, labels in input_structure.items():
     st.subheader(section)
     if section in single_sections:
         for lbl in labels:
             single_inputs[lbl] = st.number_input(lbl, key=f"single_{lbl}", value=0.0)
     else:
-        # encabezado mensual
         cols = st.columns(len(months) + 1)
         cols[0].write("**Item**")
         for i, m in enumerate(months):
             cols[i+1].write(f"**{m}**")
-        # filas de inputs
         for lbl in labels:
             row = st.columns(len(months) + 1)
             row[0].write(lbl)
@@ -137,12 +135,12 @@ for section, labels in input_structure.items():
                 val = row[i+1].number_input("", key=key, value=all_inputs[lbl][i])
                 all_inputs[lbl][i] = val
 
-# --- 5️⃣ Construir DataFrame de inputs mensuales ---
+# --- 5️⃣ Construir DataFrame ---
 df = pd.DataFrame(all_inputs, index=months)
 
-# --- 6️⃣ Definir y calcular métricas ---
+# --- 6️⃣ Calcular métricas ---
 metrics = []
-# Inbound metrics
+# Inbound
 metrics += [
     ("Offered Calls (#)", lambda r: r["Inbound Agreed Volume ForeCast"]),
     ("Handled Calls (#)", lambda r: r["Inbound Client AHT ForeCast"] * r["Offered Calls (#)" ]),
@@ -150,35 +148,35 @@ metrics += [
     ("INBOUND TRANSACTIONAL HOURS", lambda r: r["Offered Calls (#)"] * r["Inbound Agreed AHT ForeCast"] / 3600),
     ("INBOUND PRODUCTIVE HOURS", lambda r: r["Handled Calls (#)"] - r["Acceptable Calls (#)"])
 ]
-# Outgoing metrics
+# Outgoing
 metrics += [
     ("Outgoing Generation %", lambda r: r["Outgoing Volume Forecast"] / r["Inbound Client Volume ForeCast"] if r["Inbound Client Volume ForeCast"] else 0),
     ("OUTGOING TRANSACTIONAL HOURS", lambda r: r["Outgoing Volume Forecast"] * r["Outgoing AHT (Sec)"] / 3600),
     ("OUTGOING PRODUCTIVE HOURS", lambda r: r["Outgoing Volume Forecast"] * r["Outgoing Generation %"])
 ]
-# Outbound metrics
+# Outbound
 metrics += [
     ("Outbound Closed records", lambda r: r["Outbound Loaded Records"] * r["Outbound Closing %"]),
     ("OUTBOUND TRANSACTIONAL HOURS", lambda r: r["Outbound Loaded Records"] * r["Outbound AHT (Sec)"] / 3600),
     ("OUTBOUND PRODUCTIVE HOURS", lambda r: r["Outbound Closed records"] * r["Outbound Calls per Record (Ratio/h)"])
 ]
-# Backoffice metrics
+# Backoffice
 metrics += [
     ("Backoffice Generation %", lambda r: r["Backoffice Volume Handled"] / r["Inbound Client Volume ForeCast"] if r["Inbound Client Volume ForeCast"] else 0),
     ("BACKOFFICE TRANSACTIONAL HOURS", lambda r: r["Backoffice Volume Forecast"] * r["Backoffice (Ratio/h)"] / 3600),
     ("BACKOFFICE PRODUCTIVE HOURS", lambda r: r["Backoffice Volume Handled"])
 ]
-# Email metrics
+# Email
 metrics += [
     ("EMAIL TRANSACTIONAL HOURS", lambda r: r["Email Volume Handled"] * (3600 / r["Email AHT (Sec)"]) / 3600),
     ("EMAIL PRODUCTIVE HOURS", lambda r: r["Email Volume Handled"])
 ]
-# Chat metrics
+# Chat
 metrics += [
     ("CHAT TRANSACTIONAL HOURS", lambda r: (r["Chat Volume Forecast"] * r["Chat AHT"] / 3600) / r["Chat Concurrency"] if r["Chat Concurrency"] else 0),
     ("CHAT PRODUCTIVE HOURS", lambda r: r["Chat Handled"])
 ]
-# Social media metrics
+# Social media
 metrics += [
     ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda r: (r["S. Media Volume Forecast"] * r["S. Media AHT"] / 3600) / r["S. Media Concurrency"] if r["S. Media Concurrency"] else 0),
     ("SOCIAL MEDIA PRODUCTIVE HOURS", lambda r: r["S. Media Handled"])
@@ -188,7 +186,7 @@ metrics += [
     ("TOTAL TRANSACTIONAL HOURS", lambda r: sum(r[c] for c, _ in metrics if "TRANSACTIONAL" in c)),
     ("TOTAL PRODUCTIVE HOURS", lambda r: sum(r[c] for c, _ in metrics if "PRODUCTIVE" in c))
 ]
-# Shrinkage
+# Shrinkages
 metrics += [
     ("InOffice Shrinkage (Hr)", lambda r: sum(r[f] for f in input_structure["IN OFFICE SHRINKAGE"])),
     ("OutOffice Shrinkage (Hr)", lambda r: sum(r[f] for f in input_structure["OUT OFFICE SHRINKAGE"]))
@@ -197,7 +195,7 @@ metrics += [
 for name, func in metrics:
     df[name] = df.apply(func, axis=1)
 
-# --- 7️⃣ Mostrar métricas calculadas por sección ---
+# --- 7️⃣ Mostrar métricas por sección ---
 def_section_metrics = {
     "INBOUND ACTIVITY": ["Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)", "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS"],
     "OUTGOING ACTIVITY": ["Outgoing Generation %", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS"],
@@ -214,14 +212,14 @@ for section, labs in def_section_metrics.items():
     df_sec.index.name = "Month"
     st.dataframe(df_sec, use_container_width=True)
 
-# --- 8️⃣ Mostrar valores únicos ---
+# --- 8️⃣ Valores únicos ---
 if single_inputs:
     st.markdown("---")
     st.header("📋 Valores Únicos")
     for k, v in single_inputs.items():
         st.write(f"- **{k}:** {v}")
 
-# --- 9️⃣ Exportar CSV ---
+# --- 9️⃣ Export CSV ---
 if st.button("📥 Descargar CSV"):
     csv = df.to_csv(index_label="Month").encode("utf-8")
     st.download_button("Descargar CSV", data=csv, file_name="budget_results.csv", mime="text/csv")
