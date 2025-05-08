@@ -157,18 +157,29 @@ for section, labels in input_structure.items():
         for lbl in labels:
             single_inputs[lbl] = st.number_input(lbl, value=0.0, key=f"single_{lbl}")
     else:
-        # Dibujar tabla de inputs mensuales
+        # Cabecera de tabla mensual
         cols = st.columns(len(months)+1)
         cols[0].write("**Item**")
         for i, mes in enumerate(months):
             cols[i+1].write(f"**{mes}**")
+        # Filas de inputs
         for lbl in labels:
             row = st.columns(len(months)+1)
             row[0].write(lbl)
             for i, mes in enumerate(months):
                 key = f"inp_{lbl}_{mes}"
-                val = row[i+1].number_input(label=mes, value=all_inputs[lbl][i], key=key)
+                val = row[i+1].number_input(label="", value=all_inputs[lbl][i], key=key)
                 all_inputs[lbl][i] = val
+        # Filas de métricas calculadas para esta sección
+        comp_labels = def_section_metrics.get(section, [])
+        if comp_labels:
+            st.write("")  # espacio
+            for cl in comp_labels:
+                row = st.columns(len(months)+1)
+                row[0].write(f"**{cl}**")
+                for i, mes in enumerate(months):
+                    val = df.at[mes, cl]
+                    row[i+1].write(f"{val:,.2f}")
 
 # --- 5️⃣ Construir DataFrame de inputs mensuales ---
 df = pd.DataFrame(all_inputs, index=months)
