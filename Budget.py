@@ -14,7 +14,7 @@ st.sidebar.header("Input Parameters")
 
 # Inbound Activity
 st.sidebar.subheader("Inbound Activity")
-with st.sidebar.expander("Inbound Forecast"):
+with st.sidebar.expander("Inbound Activity", expanded=True):
     st.session_state.data['inbound_volume_forecast'] = st.number_input(
         "Inbound Client Volume Forecast",
         value=43876,
@@ -39,8 +39,6 @@ with st.sidebar.expander("Inbound Forecast"):
         step=1,
         key='agreed_aht_forecast'
     )
-
-with st.sidebar.expander("Inbound KPIs"):
     st.session_state.data['nda'] = st.number_input(
         "NDA (%)",
         value=100.00,
@@ -131,7 +129,7 @@ def calculate_metrics(data):
     metrics['chat_volume_forecast'] = 0  # Default value
     metrics['chat_offered'] = metrics['chat_volume_forecast']
     metrics['chat_handled'] = metrics['chat_volume_forecast']
-    metrics['chat_concurrency'] = 1.00  # Changed from 0.00 to 1.00 to prevent division by zero
+    metrics['chat_concurrency'] = 1.00  # Default value
     metrics['chat_aht'] = 0  # Default value
     metrics['chat_nda'] = 0.00  # Default value
     metrics['chat_pocc'] = 0.00  # Default value
@@ -139,7 +137,7 @@ def calculate_metrics(data):
     
     # Prevent division by zero in chat transactional hours calculation
     if metrics['chat_concurrency'] == 0:
-        metrics['chat_concurrency'] = 1.00  # Fallback value
+        metrics['chat_concurrency'] = 1.00
     
     metrics['chat_transactional_hours'] = (metrics['chat_handled'] * metrics['chat_aht'] / 3600) / metrics['chat_concurrency']
     metrics['chat_productive_hours'] = metrics['chat_availtime'] / 68.63  # Fixed value
@@ -172,7 +170,7 @@ def calculate_metrics(data):
                                        metrics['chat_productive_hours'] + 
                                        metrics['social_media_productive_hours'])
     
-    # Shrinkage
+    # In-Office Shrinkage
     metrics['aux_inactivity_hours'] = 0  # Default value
     metrics['aux_0_hours'] = 35.34  # Fixed value
     metrics['breaks_hours'] = 441.80  # Fixed value
@@ -207,6 +205,7 @@ def calculate_metrics(data):
         'backup_percent', 'admin_percent', 'systemdown_percent'
     ]])
     
+    # Out-Office Shrinkage
     metrics['ato_vacations_hours'] = 1063.81  # Fixed value
     metrics['ato_bank_holidays_hours'] = 0  # Default value
     metrics['ato_compensations_hours'] = 106.38  # Fixed value
@@ -235,6 +234,7 @@ def calculate_metrics(data):
         'uato_absence_loam_percent', 'uato_absence_unions_percent'
     ]])
     
+    # Total Hours
     metrics['total_attendance_hours'] = metrics['total_productive_hours'] / (1 - metrics['in_office_shrinkage_percent'] / 100)
     metrics['total_scheduled_hours'] = metrics['total_attendance_hours'] / (1 - metrics['out_office_shrinkage_percent'] / 100)
     
@@ -298,61 +298,46 @@ def calculate_metrics(data):
 # Display results
 metrics = calculate_metrics(st.session_state.data)
 
-# Display Inbound Metrics
-st.header("Inbound Metrics")
-with st.container():
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Offered Calls", f"{metrics['offered_calls']:,}")
-    col2.metric("Handled Calls", f"{metrics['handled_calls']:,}")
-    col3.metric("Acceptable Calls", f"{metrics['acceptable_calls']:,}")
+# Display results in vertical format
+st.header("Results")
 
-with st.container():
-    col1, col2 = st.columns(2)
-    col1.metric("Inbound AHT", f"{metrics['inbound_aht']:.2f} sec")
-    col2.metric("Inbound POCC", f"{metrics['pocc']:.2f}%")
+# Inbound Metrics
+st.subheader("Inbound Metrics")
+st.write("Offered Calls (#)", f"{metrics['offered_calls']:,}")
+st.write("Handled Calls (#)", f"{metrics['handled_calls']:,}")
+st.write("Acceptable Calls (#)", f"{metrics['acceptable_calls']:,}")
+st.write("Inbound AHT (Sec)", f"{metrics['inbound_aht']:.2f} sec")
+st.write("Inbound POCC (%)", f"{metrics['inbound_pocc']:.2f}%")
 
-# Display Productivity Metrics
-st.header("Productivity Metrics")
-with st.container():
-    col1, col2 = st.columns(2)
-    col1.metric("Transactional Hours", f"{metrics['inbound_transactional_hours']:.2f} hrs")
-    col2.metric("Productive Hours", f"{metrics['inbound_productive_hours']:.2f} hrs")
+# Productivity Metrics
+st.subheader("Productivity Metrics")
+st.write("Transactional Hours", f"{metrics['inbound_transactional_hours']:.2f} hrs")
+st.write("Productive Hours", f"{metrics['inbound_productive_hours']:.2f} hrs")
 
-# Display Shrinkage
-st.header("Shrinkage")
-with st.container():
-    col1, col2 = st.columns(2)
-    col1.metric("In-Office Shrinkage", f"{metrics['in_office_shrinkage_hours']:.2f} hrs")
-    col2.metric("Out-Office Shrinkage", f"{metrics['out_office_shrinkage_hours']:.2f} hrs")
+# Shrinkage
+st.subheader("Shrinkage")
+st.write("In-Office Shrinkage", f"{metrics['in_office_shrinkage_hours']:.2f} hrs")
+st.write("Out-Office Shrinkage", f"{metrics['out_office_shrinkage_hours']:.2f} hrs")
 
-# Display Occupancy
-st.header("Occupancy")
-with st.container():
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Phone Occupancy (POCC)", f"{metrics['pocc']:.2f}%")
-    col2.metric("In-Chair Occupancy (IOCC)", f"{metrics['iocc']:.2f}%")
-    col3.metric("Effective Occupancy (EOCC)", f"{metrics['eocc']:.2f}%")
+# Occupancy
+st.subheader("Occupancy")
+st.write("Phone Occupancy (POCC)", f"{metrics['pocc']:.2f}%")
+st.write("In-Chair Occupancy (IOCC)", f"{metrics['iocc']:.2f}%")
+st.write("Effective Occupancy (EOCC)", f"{metrics['eocc']:.2f}%")
 
-# Display Attrition and Headcount
-st.header("Attrition and Headcount")
-with st.container():
-    col1, col2 = st.columns(2)
-    col1.metric("Delta", f"{metrics['delta']:.2f}")
-    col2.metric("Delta %", f"{metrics['delta_percent']:.2f}%")
+# Attrition and Headcount
+st.subheader("Attrition and Headcount")
+st.write("Delta", f"{metrics['delta']:.2f}")
+st.write("Delta %", f"{metrics['delta_percent']:.2f}%")
+st.write("Head Count Agents", f"{metrics['head_count_agents']:,}")
+st.write("Agents Assigned to LOB", f"{metrics['agents_assigned_to_lob']:,}")
 
-with st.container():
-    col1, col2 = st.columns(2)
-    col1.metric("Head Count Agents", f"{metrics['head_count_agents']:,}")
-    col2.metric("Agents Assigned to LOB", f"{metrics['agents_assigned_to_lob']:,}")
-
-# Display Diurno and Nocturno
-st.header("Diurno and Nocturno")
-with st.container():
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("% Diurno", f"{metrics['diurno_percent']:.2f}%")
-    col2.metric("% Nocturno", f"{metrics['nocturno_percent']:.2f}%")
-    col3.metric("% Diurno Festivo", f"{metrics['diurno_festivo_percent']:.2f}%")
-    col4.metric("% Nocturno Festivo", f"{metrics['nocturno_festivo_percent']:.2f}%")
+# Diurno and Nocturno
+st.subheader("Diurno and Nocturno")
+st.write("% Diurno", f"{metrics['diurno_percent']:.2f}%")
+st.write("% Nocturno", f"{metrics['nocturno_percent']:.2f}%")
+st.write("% Diurno Festivo", f"{metrics['diurno_festivo_percent']:.2f}%")
+st.write("% Nocturno Festivo", f"{metrics['nocturno_festivo_percent']:.2f}%")
 
 if __name__ == "__main__":
     st.write("Adjust the input parameters in the sidebar to see the results update automatically.")
