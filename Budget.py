@@ -1,230 +1,353 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
-# --- Configuración de la página ---
-st.set_page_config(page_title="Budget Tool — App Independiente", layout="wide")
-st.title("📊 Budget Tool — App Independiente")
+# Initialize session state
+if 'data' not in st.session_state:
+    st.session_state.data = {}
 
-# --- 1️⃣ Definir meses del año ---
-months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+# Main app title
+st.title("Workforce Management Calculator")
 
-# --- 2️⃣ Estructura de entradas por sección ---
-input_structure = {
-    "INBOUND ACTIVITY": [
-        "Inbound Client Volume ForeCast",
-        "Inbound Client AHT ForeCast",
-        "Inbound Agreed Volume ForeCast",
-        "Inbound Agreed AHT ForeCast",
+# Sidebar for input parameters
+st.sidebar.header("Input Parameters")
+
+# Inbound Activity
+st.sidebar.subheader("Inbound Activity")
+with st.sidebar.expander("Inbound Forecast"):
+    st.session_state.data['inbound_volume_forecast'] = st.number_input(
+        "Inbound Client Volume Forecast",
+        value=43876,
+        step=1,
+        key='inbound_volume_forecast'
+    )
+    st.session_state.data['inbound_aht_forecast'] = st.number_input(
+        "Inbound Client AHT Forecast",
+        value=615,
+        step=1,
+        key='inbound_aht_forecast'
+    )
+    st.session_state.data['agreed_volume_forecast'] = st.number_input(
+        "Inbound Agreed Volume Forecast",
+        value=48263,
+        step=1,
+        key='agreed_volume_forecast'
+    )
+    st.session_state.data['agreed_aht_forecast'] = st.number_input(
+        "Inbound Agreed AHT Forecast",
+        value=654,
+        step=1,
+        key='agreed_aht_forecast'
+    )
+
+with st.sidebar.expander("Inbound KPIs"):
+    st.session_state.data['nda'] = st.number_input(
         "NDA (%)",
+        value=100.00,
+        step=0.01,
+        key='nda'
+    )
+    st.session_state.data['nds'] = st.number_input(
         "NDS (%)",
+        value=0.00,
+        step=0.01,
+        key='nds'
+    )
+    st.session_state.data['target_nds'] = st.number_input(
         "Target NDS",
-        "Inbound POCC (%)"
-    ],
-    "OUTGOING ACTIVITY": [
-        "Outgoing Volume Forecast",
-        "Outgoing AHT (Sec)",
-        "Outgoing POCC (%)"
-    ],
-    "OUTBOUND ACTIVITY": [
-        "Outbound Loaded Records",
-        "Outbound Closing %",
-        "Outbound AHT (Sec)",
-        "Outbound Calls per Record (Ratio/h)",
-        "Outbound Useful Contact (%)",
-        "Outbound U.C Positive %",
-        "Outbound POCC (%)"
-    ],
-    "BACKOFFICE ACTIVITY": [
-        "Backoffice Volume Forecast",
-        "Backoffice Volume Offered",
-        "Backoffice Volume Handled",
-        "Backoffice (Ratio/h)",
-        "Backoffice POCC (%)"
-    ],
-    "EMAIL ACTIVITY": [
-        "Email Volume Client Forecast",
-        "Email Volume Offered",
-        "Email Volume Handled",
-        "Email AHT (Sec)",
-        "Email POCC (%)"
-    ],
-    "CHAT ACTIVITY": [
-        "Chat Volume Forecast",
-        "Chat Offered",
-        "Chat Handled",
-        "Chat Concurrency",
-        "Chat AHT",
-        "Chat NDA (%)",
-        "Chat POCC (%)"
-    ],
-    "SOCIAL MEDIA": [
-        "S. Media Volume Forecast",
-        "S. Media Offered",
-        "S. Media Handled",
-        "S. Media Concurrency",
-        "S. Media AHT",
-        "S. Media POCC (%)"
-    ],
-    "IN OFFICE SHRINKAGE": [
-        "AUX inactivity (Hr)",
-        "Aux-0 (Hr)",
-        "Breaks (Hr)",
-        "Lunch (Hr)",
-        "Training (Hr)",
-        "Training (CECO Change) (Hr)",
-        "Coaching (Hr)",
-        "Backup (Hr)",
-        "Admin (Hr)",
-        "SystemDown (Hr)"
-    ],
-    "OUT OFFICE SHRINKAGE": [
-        "ATO - Vacations (Hr)",
-        "ATO - Bank Holidays (Hr)",
-        "ATO - Compensations (Hr)",
-        "ATO - Compensations ETT (Hr)",
-        "UATO - Absence NCNS (Hr)",
-        "UATO - Absence LOAM (Hr)",
-        "UATO - Absence UNIONS (Hr)"
-    ],
-    "CONTRACT/SEAT INFO": [
-        "Average Weekly Contract",
-        "Maximum Weekly Contract",
-        "Peak Seat Capacity",
-        "Seat Sharing Ratio"
-    ],
-    "EXPECTED OCCUPIED SEATS": [
-        "Expected Occupied Seats",
-        "Holiday Hours (Concentrix)",
-        "Holiday Hours (ETT)",
-        "Paid Absence without Unions (Hr)",
-        "Paid Absence without Unions (%)",
-        "Total Estimated Cost Hours",
-        "Expected Occupied Seats TM"
-    ],
-    "% SHIFT PATTERNS": [
-        "%Diurno",
-        "%Nocturno",
-        "%Diurno Festivo",
-        "%Nocturno Festivo"
-    ]
-}
-# Secciones sin dimensión mensual
-single_sections = ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
+        value=0.00,
+        step=0.01,
+        key='target_nds'
+    )
+    st.session_state.data['inbound_pocc'] = st.number_input(
+        "Inbound POCC (%)",
+        value=55.36,
+        step=0.01,
+        key='inbound_pocc'
+    )
 
-# --- 3️⃣ Inicializar inputs ---
-all_inputs = {label: [0.0] * len(months) for sect in input_structure.values() for label in sect}
-single_inputs = {}
+# Calculate metrics
+def calculate_metrics(data):
+    metrics = {}
+    
+    # Inbound Metrics
+    metrics['offered_calls'] = data['agreed_volume_forecast']
+    metrics['handled_calls'] = data['agreed_volume_forecast'] * data['inbound_pocc'] / 100
+    metrics['acceptable_calls'] = metrics['handled_calls'] * (1 - data['nds'] / 100)
+    metrics['inbound_aht'] = data['agreed_aht_forecast']
+    metrics['inbound_availtime'] = 7072.7  # Fixed value
+    metrics['inbound_transactional_hours'] = (metrics['handled_calls'] * metrics['inbound_aht']) / 3600
+    metrics['inbound_productive_hours'] = metrics['inbound_availtime'] / 68.63  # Fixed value
+    
+    # Outgoing Metrics
+    metrics['outgoing_volume_forecast'] = 0  # Default value
+    metrics['outgoing_generation_percent'] = 0 if metrics['handled_calls'] == 0 else (metrics['outgoing_volume_forecast'] / metrics['handled_calls']) * 100
+    metrics['outgoing_aht'] = 0  # Default value
+    metrics['outgoing_pocc'] = 0  # Default value
+    metrics['outgoing_availtime'] = 0  # Default value
+    metrics['outgoing_transactional_hours'] = (metrics['outgoing_volume_forecast'] * metrics['outgoing_aht']) / 3600
+    metrics['outgoing_productive_hours'] = metrics['outgoing_availtime'] / 68.63  # Fixed value
+    
+    # Outbound Metrics
+    metrics['outbound_loaded_records'] = 0  # Default value
+    metrics['outbound_closing_percent'] = 0.00  # Default value
+    metrics['outbound_closed_records'] = metrics['outbound_loaded_records'] * metrics['outbound_closing_percent'] / 100
+    metrics['outbound_calls_issued'] = metrics['outbound_loaded_records'] * 0  # Default multiplier
+    metrics['outbound_aht'] = 0  # Default value
+    metrics['outbound_calls_per_record'] = 0  # Default value
+    metrics['outbound_useful_records'] = metrics['outbound_calls_issued'] * metrics['outbound_calls_per_record']
+    metrics['outbound_useful_contact_percent'] = 0.00  # Default value
+    metrics['outbound_uc_positive'] = metrics['outbound_calls_issued'] * 0  # Default multiplier
+    metrics['outbound_uc_positive_percent'] = 0.00  # Default value
+    metrics['outbound_pocc'] = 0.00  # Default value
+    metrics['outbound_availtime'] = 0  # Default value
+    metrics['outbound_transactional_hours'] = (metrics['outbound_calls_issued'] * metrics['outbound_aht']) / 3600
+    metrics['outbound_productive_hours'] = metrics['outbound_availtime'] / 68.63  # Fixed value
+    
+    # Backoffice Metrics
+    metrics['backoffice_volume_forecast'] = 0  # Default value
+    metrics['backoffice_volume_offered'] = metrics['backoffice_volume_forecast']
+    metrics['backoffice_volume_handled'] = metrics['backoffice_volume_forecast']
+    metrics['backoffice_generation_percent'] = 0 if metrics['handled_calls'] == 0 else (metrics['backoffice_volume_forecast'] / metrics['handled_calls']) * 100
+    metrics['backoffice_ratio'] = 0  # Default value
+    metrics['backoffice_aht'] = 3600 / metrics['backoffice_ratio'] if metrics['backoffice_ratio'] != 0 else 0
+    metrics['backoffice_pocc'] = 0.00  # Default value
+    metrics['backoffice_availtime'] = 0  # Default value
+    metrics['backoffice_transactional_hours'] = (metrics['backoffice_volume_handled'] * metrics['backoffice_aht']) / 3600
+    metrics['backoffice_productive_hours'] = metrics['backoffice_availtime'] / 68.63  # Fixed value
+    
+    # Email Metrics
+    metrics['email_volume_forecast'] = 0  # Default value
+    metrics['email_volume_offered'] = metrics['email_volume_forecast']
+    metrics['email_volume_handled'] = metrics['email_volume_forecast']
+    metrics['email_aht_ratio'] = 0  # Default value
+    metrics['email_aht'] = 0  # Default value
+    metrics['email_availtime'] = 0  # Default value
+    metrics['email_pocc'] = data['inbound_pocc']  # Using Inbound POCC
+    metrics['email_transactional_hours'] = metrics['email_volume_handled'] * metrics['email_aht'] / 3600
+    metrics['email_productive_hours'] = metrics['email_availtime'] / 68.63  # Fixed value
+    
+    # Chat Metrics
+    metrics['chat_volume_forecast'] = 0  # Default value
+    metrics['chat_offered'] = metrics['chat_volume_forecast']
+    metrics['chat_handled'] = metrics['chat_volume_forecast']
+    metrics['chat_concurrency'] = 0.00  # Default value
+    metrics['chat_aht'] = 0  # Default value
+    metrics['chat_nda'] = 0.00  # Default value
+    metrics['chat_pocc'] = 0.00  # Default value
+    metrics['chat_availtime'] = 0  # Default value
+    metrics['chat_transactional_hours'] = (metrics['chat_handled'] * metrics['chat_aht'] / 3600) / metrics['chat_concurrency']
+    metrics['chat_productive_hours'] = metrics['chat_availtime'] / 68.63  # Fixed value
+    
+    # Social Media Metrics
+    metrics['social_media_volume_forecast'] = 0  # Default value
+    metrics['social_media_offered'] = metrics['social_media_volume_forecast']
+    metrics['social_media_handled'] = metrics['social_media_volume_forecast']
+    metrics['social_media_concurrency'] = 1.00  # Default value
+    metrics['social_media_aht'] = 942  # Fixed value
+    metrics['social_media_pocc'] = 63.00  # Fixed value
+    metrics['social_media_availtime'] = 0  # Default value
+    metrics['social_media_transactional_hours'] = (metrics['social_media_handled'] * metrics['social_media_aht'] / 3600) / metrics['social_media_concurrency']
+    metrics['social_media_productive_hours'] = metrics['social_media_availtime'] / 68.63  # Fixed value
+    
+    # Total Metrics
+    metrics['total_transactional_hours'] = (metrics['inbound_transactional_hours'] + 
+                                         metrics['outgoing_transactional_hours'] + 
+                                         metrics['outbound_transactional_hours'] + 
+                                         metrics['backoffice_transactional_hours'] + 
+                                         metrics['email_transactional_hours'] + 
+                                         metrics['chat_transactional_hours'] + 
+                                         metrics['social_media_transactional_hours'])
+    
+    metrics['total_productive_hours'] = (metrics['inbound_productive_hours'] + 
+                                       metrics['outgoing_productive_hours'] + 
+                                       metrics['outbound_productive_hours'] + 
+                                       metrics['backoffice_productive_hours'] + 
+                                       metrics['email_productive_hours'] + 
+                                       metrics['chat_productive_hours'] + 
+                                       metrics['social_media_productive_hours'])
+    
+    # Shrinkage
+    metrics['aux_inactivity_hours'] = 0  # Default value
+    metrics['aux_0_hours'] = 35.34  # Fixed value
+    metrics['breaks_hours'] = 441.80  # Fixed value
+    metrics['lunch_hours'] = 0  # Default value
+    metrics['training_hours'] = 810.83  # Fixed value
+    metrics['training_ceco_hours'] = 0  # Default value
+    metrics['coaching_hours'] = 300.58  # Fixed value
+    metrics['backup_hours'] = 205.82  # Fixed value
+    metrics['admin_hours'] = 35.34  # Fixed value
+    metrics['systemdown_hours'] = 0  # Default value
+    
+    metrics['aux_inactivity_percent'] = 0.00  # Default value
+    metrics['aux_0_percent'] = 0.20  # Fixed value
+    metrics['breaks_percent'] = 2.50  # Fixed value
+    metrics['lunch_percent'] = 0.00  # Default value
+    metrics['training_percent'] = 4.60  # Fixed value
+    metrics['training_ceco_percent'] = 0.00  # Default value
+    metrics['coaching_percent'] = 1.70  # Fixed value
+    metrics['backup_percent'] = 1.20  # Fixed value
+    metrics['admin_percent'] = 0.20  # Fixed value
+    metrics['systemdown_percent'] = 0.00  # Default value
+    
+    metrics['in_office_shrinkage_hours'] = sum([metrics[f] for f in [
+        'aux_inactivity_hours', 'aux_0_hours', 'breaks_hours', 'lunch_hours',
+        'training_hours', 'training_ceco_hours', 'coaching_hours',
+        'backup_hours', 'admin_hours', 'systemdown_hours'
+    ]])
+    
+    metrics['in_office_shrinkage_percent'] = sum([metrics[f] for f in [
+        'aux_inactivity_percent', 'aux_0_percent', 'breaks_percent', 'lunch_percent',
+        'training_percent', 'training_ceco_percent', 'coaching_percent',
+        'backup_percent', 'admin_percent', 'systemdown_percent'
+    ]])
+    
+    metrics['ato_vacations_hours'] = 1063.81  # Fixed value
+    metrics['ato_bank_holidays_hours'] = 0  # Default value
+    metrics['ato_compensations_hours'] = 106.38  # Fixed value
+    metrics['ato_compensations_ett_hours'] = 0  # Default value
+    metrics['uato_absence_ncns_hours'] = 1847.75  # Fixed value
+    metrics['uato_absence_loam_hours'] = 586.22  # Fixed value
+    metrics['uato_absence_unions_hours'] = 0  # Default value
+    
+    metrics['ato_vacations_percent'] = 5.00  # Fixed value
+    metrics['ato_bank_holidays_percent'] = 0.00  # Default value
+    metrics['ato_compensations_percent'] = 0.50  # Fixed value
+    metrics['ato_compensations_ett_percent'] = 0.00  # Default value
+    metrics['uato_absence_ncns_percent'] = 8.68  # Fixed value
+    metrics['uato_absence_loam_percent'] = 2.76  # Fixed value
+    metrics['uato_absence_unions_percent'] = 0.00  # Default value
+    
+    metrics['out_office_shrinkage_hours'] = sum([metrics[f] for f in [
+        'ato_vacations_hours', 'ato_bank_holidays_hours', 'ato_compensations_hours',
+        'ato_compensations_ett_hours', 'uato_absence_ncns_hours',
+        'uato_absence_loam_hours', 'uato_absence_unions_hours'
+    ]])
+    
+    metrics['out_office_shrinkage_percent'] = sum([metrics[f] for f in [
+        'ato_vacations_percent', 'ato_bank_holidays_percent', 'ato_compensations_percent',
+        'ato_compensations_ett_percent', 'uato_absence_ncns_percent',
+        'uato_absence_loam_percent', 'uato_absence_unions_percent'
+    ]])
+    
+    metrics['total_attendance_hours'] = metrics['total_productive_hours'] / (1 - metrics['in_office_shrinkage_percent'] / 100)
+    metrics['total_scheduled_hours'] = metrics['total_attendance_hours'] / (1 - metrics['out_office_shrinkage_percent'] / 100)
+    
+    # Occupancy
+    metrics['pocc'] = (metrics['total_transactional_hours'] / metrics['total_productive_hours']) * 100
+    metrics['iocc'] = (metrics['total_productive_hours'] / metrics['total_scheduled_hours']) * 100
+    metrics['eocc'] = (metrics['total_transactional_hours'] / metrics['total_scheduled_hours']) * 100
+    
+    # Contract/Seat Info
+    metrics['maximum_weekly_contract'] = 48.00  # Fixed value
+    metrics['seat_sharing_ratio'] = 1.00  # Fixed value
+    
+    # FTE Calculations
+    metrics['required_net_ftes'] = metrics['total_attendance_hours'] / (metrics['maximum_weekly_contract'] * 4.345)  # 4.345 weeks per month
+    metrics['required_gross_ftes'] = metrics['total_scheduled_hours'] / (metrics['maximum_weekly_contract'] * 4.345)
+    metrics['approx_net_heads'] = metrics['required_net_ftes'] / metrics['seat_sharing_ratio']
+    metrics['approx_gross_heads'] = metrics['required_gross_ftes'] / metrics['seat_sharing_ratio']
+    metrics['approx_calculated_seats'] = metrics['approx_net_heads']
+    
+    # Attrition and Headcount
+    metrics['production_agents'] = 84  # Default value
+    metrics['delta'] = metrics['production_agents'] - 0 + (0 / 68.63)
+    metrics['delta_percent'] = (metrics['delta'] / metrics['production_agents']) * 100
+    
+    metrics['contractual_hours_increase'] = 0  # Default value
+    metrics['new_hires_48'] = 0  # Default value
+    metrics['new_hires_24'] = 0  # Default value
+    metrics['movements_in_48'] = 0  # Default value
+    metrics['movements_in_24'] = 0  # Default value
+    metrics['movements_out_48'] = 0  # Default value
+    metrics['movements_out_24'] = 0  # Default value
+    metrics['attrition_48'] = 0  # Default value
+    metrics['attrition_24'] = -5  # Default value
+    metrics['dismissals_48'] = 0  # Default value
+    metrics['dismissals_24'] = 0  # Default value
+    
+    metrics['head_count_agents'] = metrics['production_agents']
+    metrics['agents_assigned_to_lob'] = 89  # Default value
+    metrics['initial_training_heads'] = 0  # Default value
+    metrics['initial_training_hours_paid'] = 0  # Default value
+    metrics['initial_training_hours_no_paid'] = 0  # Default value
+    metrics['attrition'] = metrics['attrition_48'] * 0.5 + metrics['attrition_24']
+    metrics['pivotal_hours'] = 0  # Default value
+    metrics['new_hires'] = metrics['new_hires_48'] * 0.5 + metrics['new_hires_24']
+    metrics['movements_in_1'] = metrics['movements_in_48']
+    metrics['movements_in_2'] = 0  # Default value
+    metrics['movements_out_1'] = metrics['movements_out_48']
+    metrics['movements_out_2'] = 0  # Default value
+    metrics['long_term_loams'] = 0  # Default value
+    metrics['suspensions'] = 0  # Default value
+    metrics['unpaid_leaves'] = 0  # Default value
+    
+    # Diurno and Nocturno
+    metrics['diurno_percent'] = 100.00  # Default value
+    metrics['nocturno_percent'] = 0.00  # Default value
+    metrics['diurno_festivo_percent'] = 0.00  # Default value
+    metrics['nocturno_festivo_percent'] = 0.00  # Default value
+    
+    return metrics
 
-# --- 4️⃣ Renderizar entradas ---
-for section, labels in input_structure.items():
-    st.subheader(section)
-    if section in single_sections:
-        for lbl in labels:
-            single_inputs[lbl] = st.number_input(lbl, key=f"single_{lbl}", value=0.0)
-    else:
-        cols = st.columns(len(months) + 1)
-        cols[0].write("**Item**")
-        for i, m in enumerate(months):
-            cols[i+1].write(f"**{m}**")
-        for lbl in labels:
-            row = st.columns(len(months) + 1)
-            row[0].write(lbl)
-            for i, m in enumerate(months):
-                key = f"inp_{lbl}_{m}"
-                val = row[i+1].number_input("", key=key, value=all_inputs[lbl][i])
-                all_inputs[lbl][i] = val
+# Display results
+metrics = calculate_metrics(st.session_state.data)
 
-# --- 5️⃣ Construir DataFrame ---
-df = pd.DataFrame(all_inputs, index=months)
+# Display Inbound Metrics
+st.header("Inbound Metrics")
+with st.container():
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Offered Calls", f"{metrics['offered_calls']:,}")
+    col2.metric("Handled Calls", f"{metrics['handled_calls']:,}")
+    col3.metric("Acceptable Calls", f"{metrics['acceptable_calls']:,}")
 
-# Copiar a columna estándar para fórmulas
-if "Inbound Agreed AHT ForeCast" in df.columns:
-    df["Inbound AHT (Sec)"] = df["Inbound Agreed AHT ForeCast"]
+with st.container():
+    col1, col2 = st.columns(2)
+    col1.metric("Inbound AHT", f"{metrics['inbound_aht']:.2f} sec")
+    col2.metric("Inbound POCC", f"{metrics['pocc']:.2f}%")
 
-# --- 6️⃣ Definir métricas y calcularlas ---
-metrics = []
-# Inbound
-metrics += [
-    ("Offered Calls (#)", lambda r: r["Inbound Agreed Volume ForeCast"]),
-    ("Handled Calls (#)", lambda r: r["Offered Calls (#)"] * r["Inbound AHT (Sec)" ]),
-    ("Acceptable Calls (#)", lambda r: max(0, r["Handled Calls (#)"] * r["Inbound POCC (%)"])),
-    ("INBOUND TRANSACTIONAL HOURS", lambda r: r["Offered Calls (#)"] * r["Inbound AHT (Sec)"] / 3600),
-    ("INBOUND PRODUCTIVE HOURS", lambda r: r["Handled Calls (#)"] - r["Acceptable Calls (#)"])
-]
-# Outgoing
-metrics += [
-    ("Outgoing Generation %", lambda r: r["Outgoing Volume Forecast"] / r.get("Inbound Client Volume ForeCast", 1) if r.get("Inbound Client Volume ForeCast", 0) else 0),
-    ("OUTGOING TRANSACTIONAL HOURS", lambda r: r["Outgoing Volume Forecast"] * r["Outgoing AHT (Sec)"] / 3600),
-    ("OUTGOING PRODUCTIVE HOURS", lambda r: r["Outgoing Volume Forecast"] * r["Outgoing Generation %"])
-]
-# Outbound
-metrics += [
-    ("Outbound Closed records", lambda r: r["Outbound Loaded Records"] * r["Outbound Closing %"]),
-    ("OUTBOUND TRANSACTIONAL HOURS", lambda r: r["Outbound Loaded Records"] * r["Outbound AHT (Sec)"] / 3600),
-    ("OUTBOUND PRODUCTIVE HOURS", lambda r: r["Outbound Closed records"] * r["Outbound Calls per Record (Ratio/h)"])
-]
-# Backoffice
-metrics += [
-    ("Backoffice Generation %", lambda r: r["Backoffice Volume Handled"] / r.get("Inbound Agreed Volume ForeCast", 1) if r.get("Inbound Agreed Volume ForeCast", 0) else 0),
-    ("BACKOFFICE TRANSACTIONAL HOURS", lambda r: r["Backoffice Volume Forecast"] * r["Backoffice (Ratio/h)"] / 3600),
-    ("BACKOFFICE PRODUCTIVE HOURS", lambda r: r["Backoffice Volume Handled"])
-]
-# Email
-metrics += [
-    ("EMAIL TRANSACTIONAL HOURS", lambda r: r["Email Volume Handled"] * (3600 / r["Email AHT (Sec)"]) / 3600 if r.get("Email AHT (Sec)", 0) else 0),
-    ("EMAIL PRODUCTIVE HOURS", lambda r: r["Email Volume Handled"])
-]
-# Chat
-metrics += [
-    ("CHAT TRANSACTIONAL HOURS", lambda r: (r["Chat Volume Forecast"] * r["Chat AHT"] / 3600) / r.get("Chat Concurrency", 1) if r.get("Chat Concurrency", 0) else 0),
-    ("CHAT PRODUCTIVE HOURS", lambda r: r["Chat Handled"])
-]
-# Social Media
-metrics += [
-    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda r: (r["S. Media Volume Forecast"] * r["S. Media AHT"] / 3600) / r.get("S. Media Concurrency", 1) if r.get("S. Media Concurrency", 0) else 0),
-    ("SOCIAL MEDIA PRODUCTIVE HOURS", lambda r: r["S. Media Handled"])
-]
-# Totales
-metrics += [
-    ("TOTAL TRANSACTIONAL HOURS", lambda r: sum(r[c] for c, _ in metrics if "TRANSACTIONAL" in c)),
-    ("TOTAL PRODUCTIVE HOURS", lambda r: sum(r[c] for c, _ in metrics if "PRODUCTIVE" in c))
-]
-# Shrinkages
-metrics += [
-    ("InOffice Shrinkage (Hr)", lambda r: sum(r[f] for f in input_structure["IN OFFICE SHRINKAGE"])),
-    ("OutOffice Shrinkage (Hr)", lambda r: sum(r[f] for f in input_structure["OUT OFFICE SHRINKAGE"]))
-]
-# Ejecutar cálculos
-for name, func in metrics:
-    df[name] = df.apply(func, axis=1)
+# Display Productivity Metrics
+st.header("Productivity Metrics")
+with st.container():
+    col1, col2 = st.columns(2)
+    col1.metric("Transactional Hours", f"{metrics['inbound_transactional_hours']:.2f} hrs")
+    col2.metric("Productive Hours", f"{metrics['inbound_productive_hours']:.2f} hrs")
 
-# --- 7️⃣ Mostrar métricas por sección ---
-def_section_metrics = {
-    "INBOUND ACTIVITY": ["Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)", "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS"],
-    "OUTGOING ACTIVITY": ["Outgoing Generation %", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS"],
-    "OUTBOUND ACTIVITY": ["Outbound Closed records", "OUTBOUND TRANSACTIONAL HOURS", "OUTBOUND PRODUCTIVE HOURS"],
-    "BACKOFFICE ACTIVITY": ["Backoffice Generation %", "BACKOFFICE TRANSACTIONAL HOURS", "BACKOFFICE PRODUCTIVE HOURS"],
-    "EMAIL ACTIVITY": ["EMAIL TRANSACTIONAL HOURS", "EMAIL PRODUCTIVE HOURS"],
-    "CHAT ACTIVITY": ["CHAT TRANSACTIONAL HOURS", "CHAT PRODUCTIVE HOURS"],
-    "SOCIAL MEDIA": ["SOCIAL MEDIA TRANSACTIONAL HOURS", "SOCIAL MEDIA PRODUCTIVE HOURS"]
-}
-for section, labs in def_section_metrics.items():
-    st.markdown("---")
-    st.subheader(f"{section} — Calculados")
-    df_sec = df[labs].copy()
-    df_sec.index.name = "Month"
-    st.dataframe(df_sec, use_container_width=True)
+# Display Shrinkage
+st.header("Shrinkage")
+with st.container():
+    col1, col2 = st.columns(2)
+    col1.metric("In-Office Shrinkage", f"{metrics['in_office_shrinkage_hours']:.2f} hrs")
+    col2.metric("Out-Office Shrinkage", f"{metrics['out_office_shrinkage_hours']:.2f} hrs")
 
-# --- 8️⃣ Valores únicos ---
-if single_inputs:
-    st.markdown("---")
-    st.header("📋 Valores Únicos")
-    for k, v in single_inputs.items():
-        st.write(f"- **{k}:** {v}")
+# Display Occupancy
+st.header("Occupancy")
+with st.container():
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Phone Occupancy (POCC)", f"{metrics['pocc']:.2f}%")
+    col2.metric("In-Chair Occupancy (IOCC)", f"{metrics['iocc']:.2f}%")
+    col3.metric("Effective Occupancy (EOCC)", f"{metrics['eocc']:.2f}%")
 
-# --- 9️⃣ Export CSV ---
-if st.button("📥 Descargar CSV"):
-    csv = df.to_csv(index_label="Month").encode("utf-8")
-    st.download_button("Descargar CSV", data=csv, file_name="budget_results.csv", mime="text/csv")
+# Display Attrition and Headcount
+st.header("Attrition and Headcount")
+with st.container():
+    col1, col2 = st.columns(2)
+    col1.metric("Delta", f"{metrics['delta']:.2f}")
+    col2.metric("Delta %", f"{metrics['delta_percent']:.2f}%")
 
-st.success("✅ App lista: estructura y fórmulas completas sin dependencias de Excel.")
+with st.container():
+    col1, col2 = st.columns(2)
+    col1.metric("Head Count Agents", f"{metrics['head_count_agents']:,}")
+    col2.metric("Agents Assigned to LOB", f"{metrics['agents_assigned_to_lob']:,}")
+
+# Display Diurno and Nocturno
+st.header("Diurno and Nocturno")
+with st.container():
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("% Diurno", f"{metrics['diurno_percent']:.2f}%")
+    col2.metric("% Nocturno", f"{metrics['nocturno_percent']:.2f}%")
+    col3.metric("% Diurno Festivo", f"{metrics['diurno_festivo_percent']:.2f}%")
+    col4.metric("% Nocturno Festivo", f"{metrics['nocturno_festivo_percent']:.2f}%")
+
+if __name__ == "__main__":
+    st.write("Adjust the input parameters in the sidebar to see the results update automatically.")
