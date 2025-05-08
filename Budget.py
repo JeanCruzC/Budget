@@ -3,164 +3,109 @@ import pandas as pd
 import numpy as np
 
 # Initialize session state
-if 'data' not in st.session_state:
-    st.session_state.data = {}
+if 'weeks' not in st.session_state:
+    st.session_state.weeks = {f'week_{i}': {} for i in range(1, 7)}
 
-# Main app title
-st.title("Workforce Management Calculator")
-
-# Sidebar for input parameters
-st.sidebar.header("Input Parameters")
-
-# Inbound Activity
-st.sidebar.subheader("Inbound Activity")
-with st.sidebar.expander("Inbound Activity", expanded=True):
-    st.session_state.data['inbound_volume_forecast'] = st.number_input(
-        "Inbound Client Volume Forecast",
-        value=43876,
-        step=1,
-        key='inbound_volume_forecast'
-    )
-    st.session_state.data['inbound_aht_forecast'] = st.number_input(
-        "Inbound Client AHT Forecast",
-        value=615,
-        step=1,
-        key='inbound_aht_forecast'
-    )
-    st.session_state.data['agreed_volume_forecast'] = st.number_input(
-        "Inbound Agreed Volume Forecast",
-        value=48263,
-        step=1,
-        key='agreed_volume_forecast'
-    )
-    st.session_state.data['agreed_aht_forecast'] = st.number_input(
-        "Inbound Agreed AHT Forecast",
-        value=654,
-        step=1,
-        key='agreed_aht_forecast'
-    )
-    st.session_state.data['nda'] = st.number_input(
-        "NDA (%)",
-        value=100.00,
-        step=0.01,
-        key='nda'
-    )
-    st.session_state.data['nds'] = st.number_input(
-        "NDS (%)",
-        value=0.00,
-        step=0.01,
-        key='nds'
-    )
-    st.session_state.data['target_nds'] = st.number_input(
-        "Target NDS",
-        value=0.00,
-        step=0.01,
-        key='target_nds'
-    )
-    st.session_state.data['inbound_pocc'] = st.number_input(
-        "Inbound POCC (%)",
-        value=55.36,
-        step=0.01,
-        key='inbound_pocc'
-    )
-
-# Calculate metrics
+# Function to calculate metrics
 def calculate_metrics(data):
     metrics = {}
     
     # Inbound Metrics
-    metrics['offered_calls'] = data['agreed_volume_forecast']
-    metrics['handled_calls'] = data['agreed_volume_forecast'] * data['inbound_pocc'] / 100
-    metrics['acceptable_calls'] = metrics['handled_calls'] * (1 - data['nds'] / 100)
-    metrics['inbound_aht'] = data['agreed_aht_forecast']
-    metrics['inbound_availtime'] = 7072.7  # Fixed value
+    metrics['offered_calls'] = data.get('agreed_volume_forecast', 48263)
+    metrics['handled_calls'] = metrics['offered_calls'] * data.get('inbound_pocc', 55.36) / 100
+    metrics['acceptable_calls'] = metrics['handled_calls'] * (1 - data.get('nds', 0) / 100)
+    metrics['inbound_aht'] = data.get('agreed_aht_forecast', 654)
+    metrics['inbound_availtime'] = data.get('inbound_availtime', 7072.7)
     metrics['inbound_transactional_hours'] = (metrics['handled_calls'] * metrics['inbound_aht']) / 3600
-    metrics['inbound_productive_hours'] = metrics['inbound_availtime'] / 68.63  # Fixed value
+    metrics['inbound_productive_hours'] = metrics['inbound_availtime'] / data.get('productive_hours_multiplier', 68.63)
     
     # Outgoing Metrics
-    metrics['outgoing_volume_forecast'] = 0  # Default value
-    metrics['outgoing_generation_percent'] = 0 if metrics['handled_calls'] == 0 else (metrics['outgoing_volume_forecast'] / metrics['handled_calls']) * 100
-    metrics['outgoing_aht'] = 0  # Default value
-    metrics['outgoing_pocc'] = 0  # Default value
-    metrics['outgoing_availtime'] = 0  # Default value
+    metrics['outgoing_volume_forecast'] = data.get('outgoing_volume_forecast', 0)
+    metrics['outgoing_generation_percent'] = 0 if metrics['offered_calls'] == 0 else (metrics['outgoing_volume_forecast'] / metrics['offered_calls']) * 100
+    metrics['outgoing_aht'] = data.get('outgoing_aht', 0)
+    metrics['outgoing_pocc'] = data.get('outgoing_pocc', 0)
+    metrics['outgoing_availtime'] = data.get('outgoing_availtime', 0)
+    metrics['outgoing_availtime_percent'] = data.get('outgoing_availtime_percent', 0)
     metrics['outgoing_transactional_hours'] = (metrics['outgoing_volume_forecast'] * metrics['outgoing_aht']) / 3600
-    metrics['outgoing_productive_hours'] = metrics['outgoing_availtime'] / 68.63  # Fixed value
+    metrics['outgoing_productive_hours'] = metrics['outgoing_availtime'] / data.get('productive_hours_multiplier', 68.63)
     
     # Outbound Metrics
-    metrics['outbound_loaded_records'] = 0  # Default value
-    metrics['outbound_closing_percent'] = 0.00  # Default value
+    metrics['outbound_loaded_records'] = data.get('outbound_loaded_records', 0)
+    metrics['outbound_closing_percent'] = data.get('outbound_closing_percent', 0)
     metrics['outbound_closed_records'] = metrics['outbound_loaded_records'] * metrics['outbound_closing_percent'] / 100
-    metrics['outbound_calls_issued'] = metrics['outbound_loaded_records'] * 0  # Default multiplier
-    metrics['outbound_aht'] = 0  # Default value
-    metrics['outbound_calls_per_record'] = 0  # Default value
-    metrics['outbound_useful_records'] = metrics['outbound_calls_issued'] * metrics['outbound_calls_per_record']
-    metrics['outbound_useful_contact_percent'] = 0.00  # Default value
-    metrics['outbound_uc_positive'] = metrics['outbound_calls_issued'] * 0  # Default multiplier
-    metrics['outbound_uc_positive_percent'] = 0.00  # Default value
-    metrics['outbound_pocc'] = 0.00  # Default value
-    metrics['outbound_availtime'] = 0  # Default value
+    metrics['outbound_calls_per_record'] = data.get('outbound_calls_per_record', 0)
+    metrics['outbound_calls_issued'] = metrics['outbound_closed_records'] * metrics['outbound_calls_per_record']
+    metrics['outbound_useful_contact_percent'] = data.get('outbound_useful_contact_percent', 0)
+    metrics['outbound_useful_records'] = metrics['outbound_calls_issued'] * metrics['outbound_useful_contact_percent'] / 100
+    metrics['outbound_uc_positive_percent'] = data.get('outbound_uc_positive_percent', 0)
+    metrics['outbound_uc_positive'] = metrics['outbound_useful_records'] * metrics['outbound_uc_positive_percent'] / 100
+    metrics['outbound_pocc'] = data.get('outbound_pocc', 0)
+    metrics['outbound_availtime'] = data.get('outbound_availtime', 0)
+    metrics['outbound_availtime_percent'] = data.get('outbound_availtime_percent', 0)
     metrics['outbound_transactional_hours'] = (metrics['outbound_calls_issued'] * metrics['outbound_aht']) / 3600
-    metrics['outbound_productive_hours'] = metrics['outbound_availtime'] / 68.63  # Fixed value
+    metrics['outbound_productive_hours'] = metrics['outbound_availtime'] / data.get('productive_hours_multiplier', 68.63)
     
     # Backoffice Metrics
-    metrics['backoffice_volume_forecast'] = 0  # Default value
-    metrics['backoffice_volume_offered'] = metrics['backoffice_volume_forecast']
-    metrics['backoffice_volume_handled'] = metrics['backoffice_volume_forecast']
+    metrics['backoffice_volume_forecast'] = data.get('backoffice_volume_forecast', 0)
+    metrics['backoffice_volume_offered'] = data.get('backoffice_volume_offered', 0)
+    metrics['backoffice_volume_handled'] = data.get('backoffice_volume_handled', 0)
     metrics['backoffice_generation_percent'] = 0 if metrics['handled_calls'] == 0 else (metrics['backoffice_volume_forecast'] / metrics['handled_calls']) * 100
-    metrics['backoffice_ratio'] = 0  # Default value
+    metrics['backoffice_ratio'] = data.get('backoffice_ratio', 0)
     metrics['backoffice_aht'] = 3600 / metrics['backoffice_ratio'] if metrics['backoffice_ratio'] != 0 else 0
-    metrics['backoffice_pocc'] = 0.00  # Default value
-    metrics['backoffice_availtime'] = 0  # Default value
+    metrics['backoffice_pocc'] = data.get('backoffice_pocc', 0)
+    metrics['backoffice_availtime'] = data.get('backoffice_availtime', 0)
+    metrics['backoffice_availtime_percent'] = data.get('backoffice_availtime_percent', 0)
     metrics['backoffice_transactional_hours'] = (metrics['backoffice_volume_handled'] * metrics['backoffice_aht']) / 3600
-    metrics['backoffice_productive_hours'] = metrics['backoffice_availtime'] / 68.63  # Fixed value
+    metrics['backoffice_productive_hours'] = metrics['backoffice_availtime'] / data.get('productive_hours_multiplier', 68.63)
     
     # Email Metrics
-    metrics['email_volume_forecast'] = 0  # Default value
-    metrics['email_volume_offered'] = metrics['email_volume_forecast']
+    metrics['email_volume_forecast'] = data.get('email_volume_forecast', 0)
+    metrics['email_volume_offered'] = data.get('email_volume_offered', 0)
     metrics['email_volume_handled'] = metrics['email_volume_forecast']
-    metrics['email_aht_ratio'] = 0  # Default value
-    metrics['email_aht'] = 0  # Default value
-    metrics['email_availtime'] = 0  # Default value
-    metrics['email_pocc'] = data['inbound_pocc']  # Using Inbound POCC
-    metrics['email_transactional_hours'] = metrics['email_volume_handled'] * metrics['email_aht'] / 3600
-    metrics['email_productive_hours'] = metrics['email_availtime'] / 68.63  # Fixed value
+    metrics['email_aht_ratio'] = 3600 / data.get('email_aht', 0) if data.get('email_aht', 0) != 0 else 0
+    metrics['email_aht'] = data.get('email_aht', 0)
+    metrics['email_pocc'] = data.get('email_pocc', data.get('inbound_pocc', 55.36))
+    metrics['email_availtime'] = data.get('email_availtime', 0)
+    metrics['email_transactional_hours'] = metrics['email_volume_handled'] / metrics['email_aht_ratio'] if metrics['email_aht_ratio'] != 0 else 0
+    metrics['email_productive_hours'] = metrics['email_availtime'] / data.get('productive_hours_multiplier', 68.63)
     
     # Chat Metrics
-    metrics['chat_volume_forecast'] = 0  # Default value
-    metrics['chat_offered'] = metrics['chat_volume_forecast']
-    metrics['chat_handled'] = metrics['chat_volume_forecast']
-    metrics['chat_concurrency'] = 1.00  # Default value
-    metrics['chat_aht'] = 0  # Default value
-    metrics['chat_nda'] = 0.00  # Default value
-    metrics['chat_pocc'] = 0.00  # Default value
-    metrics['chat_availtime'] = 0  # Default value
+    metrics['chat_volume_forecast'] = data.get('chat_volume_forecast', 0)
+    metrics['chat_offered'] = data.get('chat_offered', 0)
+    metrics['chat_handled'] = data.get('chat_handled', 0)
+    metrics['chat_concurrency'] = data.get('chat_concurrency', 1.00)
+    metrics['chat_aht'] = data.get('chat_aht', 0)
+    metrics['chat_nda'] = data.get('chat_nda', 0)
+    metrics['chat_pocc'] = data.get('chat_pocc', 0)
+    metrics['chat_availtime'] = data.get('chat_availtime', 0)
     
     # Prevent division by zero in chat transactional hours calculation
     if metrics['chat_concurrency'] == 0:
         metrics['chat_concurrency'] = 1.00
     
     metrics['chat_transactional_hours'] = (metrics['chat_handled'] * metrics['chat_aht'] / 3600) / metrics['chat_concurrency']
-    metrics['chat_productive_hours'] = metrics['chat_availtime'] / 68.63  # Fixed value
+    metrics['chat_productive_hours'] = metrics['chat_availtime'] / data.get('productive_hours_multiplier', 68.63)
     
     # Social Media Metrics
-    metrics['social_media_volume_forecast'] = 0  # Default value
-    metrics['social_media_offered'] = metrics['social_media_volume_forecast']
-    metrics['social_media_handled'] = metrics['social_media_volume_forecast']
-    metrics['social_media_concurrency'] = 1.00  # Default value
-    metrics['social_media_aht'] = 942  # Fixed value
-    metrics['social_media_pocc'] = 63.00  # Fixed value
-    metrics['social_media_availtime'] = 0  # Default value
+    metrics['social_media_volume_forecast'] = data.get('social_media_volume_forecast', 0)
+    metrics['social_media_offered'] = data.get('social_media_offered', 0)
+    metrics['social_media_handled'] = data.get('social_media_handled', 0)
+    metrics['social_media_concurrency'] = data.get('social_media_concurrency', 1.00)
+    metrics['social_media_aht'] = data.get('social_media_aht', 942)
+    metrics['social_media_availtime'] = data.get('social_media_availtime', 0)
+    metrics['social_media_availtime_percent'] = data.get('social_media_availtime_percent', 0)
+    metrics['social_media_pocc'] = data.get('social_media_pocc', 63.00)
     metrics['social_media_transactional_hours'] = (metrics['social_media_handled'] * metrics['social_media_aht'] / 3600) / metrics['social_media_concurrency']
-    metrics['social_media_productive_hours'] = metrics['social_media_availtime'] / 68.63  # Fixed value
+    metrics['social_media_productive_hours'] = metrics['social_media_availtime'] / data.get('productive_hours_multiplier', 68.63)
     
-    # Total Metrics
+    # Total Hours
     metrics['total_transactional_hours'] = (metrics['inbound_transactional_hours'] + 
-                                         metrics['outgoing_transactional_hours'] + 
-                                         metrics['outbound_transactional_hours'] + 
-                                         metrics['backoffice_transactional_hours'] + 
-                                         metrics['email_transactional_hours'] + 
-                                         metrics['chat_transactional_hours'] + 
-                                         metrics['social_media_transactional_hours'])
+                                          metrics['outgoing_transactional_hours'] + 
+                                          metrics['outbound_transactional_hours'] + 
+                                          metrics['backoffice_transactional_hours'] + 
+                                          metrics['email_transactional_hours'] + 
+                                          metrics['chat_transactional_hours'] + 
+                                          metrics['social_media_transactional_hours'])
     
     metrics['total_productive_hours'] = (metrics['inbound_productive_hours'] + 
                                        metrics['outgoing_productive_hours'] + 
@@ -171,33 +116,16 @@ def calculate_metrics(data):
                                        metrics['social_media_productive_hours'])
     
     # In-Office Shrinkage
-    metrics['aux_inactivity_hours'] = 0  # Default value
-    metrics['aux_0_hours'] = 35.34  # Fixed value
-    metrics['breaks_hours'] = 441.80  # Fixed value
-    metrics['lunch_hours'] = 0  # Default value
-    metrics['training_hours'] = 810.83  # Fixed value
-    metrics['training_ceco_hours'] = 0  # Default value
-    metrics['coaching_hours'] = 300.58  # Fixed value
-    metrics['backup_hours'] = 205.82  # Fixed value
-    metrics['admin_hours'] = 35.34  # Fixed value
-    metrics['systemdown_hours'] = 0  # Default value
-    
-    metrics['aux_inactivity_percent'] = 0.00  # Default value
-    metrics['aux_0_percent'] = 0.20  # Fixed value
-    metrics['breaks_percent'] = 2.50  # Fixed value
-    metrics['lunch_percent'] = 0.00  # Default value
-    metrics['training_percent'] = 4.60  # Fixed value
-    metrics['training_ceco_percent'] = 0.00  # Default value
-    metrics['coaching_percent'] = 1.70  # Fixed value
-    metrics['backup_percent'] = 1.20  # Fixed value
-    metrics['admin_percent'] = 0.20  # Fixed value
-    metrics['systemdown_percent'] = 0.00  # Default value
-    
-    metrics['in_office_shrinkage_hours'] = sum([metrics[f] for f in [
-        'aux_inactivity_hours', 'aux_0_hours', 'breaks_hours', 'lunch_hours',
-        'training_hours', 'training_ceco_hours', 'coaching_hours',
-        'backup_hours', 'admin_hours', 'systemdown_hours'
-    ]])
+    metrics['aux_inactivity_percent'] = data.get('aux_inactivity_percent', 0)
+    metrics['aux_0_percent'] = data.get('aux_0_percent', 0.2)
+    metrics['breaks_percent'] = data.get('breaks_percent', 2.5)
+    metrics['lunch_percent'] = data.get('lunch_percent', 0)
+    metrics['training_percent'] = data.get('training_percent', 4.6)
+    metrics['training_ceco_percent'] = data.get('training_ceco_percent', 0)
+    metrics['coaching_percent'] = data.get('coaching_percent', 1.7)
+    metrics['backup_percent'] = data.get('backup_percent', 1.2)
+    metrics['admin_percent'] = data.get('admin_percent', 0.2)
+    metrics['systemdown_percent'] = data.get('systemdown_percent', 0)
     
     metrics['in_office_shrinkage_percent'] = sum([metrics[f] for f in [
         'aux_inactivity_percent', 'aux_0_percent', 'breaks_percent', 'lunch_percent',
@@ -205,28 +133,34 @@ def calculate_metrics(data):
         'backup_percent', 'admin_percent', 'systemdown_percent'
     ]])
     
-    # Out-Office Shrinkage
-    metrics['ato_vacations_hours'] = 1063.81  # Fixed value
-    metrics['ato_bank_holidays_hours'] = 0  # Default value
-    metrics['ato_compensations_hours'] = 106.38  # Fixed value
-    metrics['ato_compensations_ett_hours'] = 0  # Default value
-    metrics['uato_absence_ncns_hours'] = 1847.75  # Fixed value
-    metrics['uato_absence_loam_hours'] = 586.22  # Fixed value
-    metrics['uato_absence_unions_hours'] = 0  # Default value
+    metrics['total_attendance_hours'] = metrics['total_productive_hours'] / (1 - metrics['in_office_shrinkage_percent'] / 100)
     
-    metrics['ato_vacations_percent'] = 5.00  # Fixed value
-    metrics['ato_bank_holidays_percent'] = 0.00  # Default value
-    metrics['ato_compensations_percent'] = 0.50  # Fixed value
-    metrics['ato_compensations_ett_percent'] = 0.00  # Default value
-    metrics['uato_absence_ncns_percent'] = 8.68  # Fixed value
-    metrics['uato_absence_loam_percent'] = 2.76  # Fixed value
-    metrics['uato_absence_unions_percent'] = 0.00  # Default value
+    # Calculate hours based on percentage
+    metrics['aux_inactivity_hours'] = metrics['aux_inactivity_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['aux_0_hours'] = metrics['aux_0_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['breaks_hours'] = metrics['breaks_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['lunch_hours'] = metrics['lunch_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['training_hours'] = metrics['training_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['training_ceco_hours'] = metrics['training_ceco_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['coaching_hours'] = metrics['coaching_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['backup_hours'] = metrics['backup_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['admin_hours'] = metrics['admin_percent'] * metrics['total_attendance_hours'] / 100
+    metrics['systemdown_hours'] = metrics['systemdown_percent'] * metrics['total_attendance_hours'] / 100
     
-    metrics['out_office_shrinkage_hours'] = sum([metrics[f] for f in [
-        'ato_vacations_hours', 'ato_bank_holidays_hours', 'ato_compensations_hours',
-        'ato_compensations_ett_hours', 'uato_absence_ncns_hours',
-        'uato_absence_loam_hours', 'uato_absence_unions_hours'
+    metrics['in_office_shrinkage_hours'] = sum([metrics[f] for f in [
+        'aux_inactivity_hours', 'aux_0_hours', 'breaks_hours', 'lunch_hours',
+        'training_hours', 'training_ceco_hours', 'coaching_hours',
+        'backup_hours', 'admin_hours', 'systemdown_hours'
     ]])
+    
+    # Out-Office Shrinkage
+    metrics['ato_vacations_percent'] = data.get('ato_vacations_percent', 5.00)
+    metrics['ato_bank_holidays_percent'] = data.get('ato_bank_holidays_percent', 0.00)
+    metrics['ato_compensations_percent'] = data.get('ato_compensations_percent', 0.50)
+    metrics['ato_compensations_ett_percent'] = data.get('ato_compensations_ett_percent', 0.00)
+    metrics['uato_absence_ncns_percent'] = data.get('uato_absence_ncns_percent', 8.68)
+    metrics['uato_absence_loam_percent'] = data.get('uato_absence_loam_percent', 2.76)
+    metrics['uato_absence_unions_percent'] = data.get('uato_absence_unions_percent', 0.00)
     
     metrics['out_office_shrinkage_percent'] = sum([metrics[f] for f in [
         'ato_vacations_percent', 'ato_bank_holidays_percent', 'ato_compensations_percent',
@@ -234,110 +168,36 @@ def calculate_metrics(data):
         'uato_absence_loam_percent', 'uato_absence_unions_percent'
     ]])
     
-    # Total Hours
-    metrics['total_attendance_hours'] = metrics['total_productive_hours'] / (1 - metrics['in_office_shrinkage_percent'] / 100)
     metrics['total_scheduled_hours'] = metrics['total_attendance_hours'] / (1 - metrics['out_office_shrinkage_percent'] / 100)
     
+    # Calculate hours based on percentage
+    metrics['ato_vacations_hours'] = metrics['ato_vacations_percent'] * metrics['total_scheduled_hours'] / 100
+    metrics['ato_bank_holidays_hours'] = metrics['ato_bank_holidays_percent'] * metrics['total_scheduled_hours'] / 100
+    metrics['ato_compensations_hours'] = metrics['ato_compensations_percent'] * metrics['total_scheduled_hours'] / 100
+    metrics['ato_compensations_ett_hours'] = metrics['ato_compensations_ett_percent'] * metrics['total_scheduled_hours'] / 100
+    metrics['uato_absence_ncns_hours'] = metrics['uato_absence_ncns_percent'] * metrics['total_scheduled_hours'] / 100
+    metrics['uato_absence_loam_hours'] = metrics['uato_absence_loam_percent'] * metrics['total_scheduled_hours'] / 100
+    metrics['uato_absence_unions_hours'] = metrics['uato_absence_unions_percent'] * metrics['total_scheduled_hours'] / 100
+    
+    metrics['out_office_shrinkage_hours'] = sum([metrics[f] for f in [
+        'ato_vacations_hours', 'ato_bank_holidays_hours', 'ato_compensations_hours',
+        'ato_compensations_ett_hours', 'uato_absence_ncns_hours',
+        'uato_absence_loam_hours', 'uato_absence_unions_hours'
+    ]])
+    
     # Occupancy
-    metrics['pocc'] = (metrics['total_transactional_hours'] / metrics['total_productive_hours']) * 100
-    metrics['iocc'] = (metrics['total_productive_hours'] / metrics['total_scheduled_hours']) * 100
-    metrics['eocc'] = (metrics['total_transactional_hours'] / metrics['total_scheduled_hours']) * 100
+    metrics['pocc'] = (metrics['total_transactional_hours'] / metrics['total_productive_hours']) * 100 if metrics['total_productive_hours'] > 0 else 0
+    metrics['iocc'] = (metrics['total_productive_hours'] / metrics['total_attendance_hours']) * 100 if metrics['total_attendance_hours'] > 0 else 0
+    metrics['eocc'] = (metrics['total_transactional_hours'] / metrics['total_attendance_hours']) * 100 if metrics['total_attendance_hours'] > 0 else 0
+    
+    # Hours Agreed with Client
+    metrics['total_productive_hours_agreed'] = metrics['total_productive_hours']
+    metrics['total_attendance_hours_agreed'] = metrics['total_attendance_hours']
+    metrics['total_scheduled_hours_agreed'] = metrics['total_scheduled_hours']
     
     # Contract/Seat Info
-    metrics['maximum_weekly_contract'] = 48.00  # Fixed value
-    metrics['seat_sharing_ratio'] = 1.00  # Fixed value
-    
-    # FTE Calculations
-    metrics['required_net_ftes'] = metrics['total_attendance_hours'] / (metrics['maximum_weekly_contract'] * 4.345)  # 4.345 weeks per month
-    metrics['required_gross_ftes'] = metrics['total_scheduled_hours'] / (metrics['maximum_weekly_contract'] * 4.345)
-    metrics['approx_net_heads'] = metrics['required_net_ftes'] / metrics['seat_sharing_ratio']
-    metrics['approx_gross_heads'] = metrics['required_gross_ftes'] / metrics['seat_sharing_ratio']
-    metrics['approx_calculated_seats'] = metrics['approx_net_heads']
-    
-    # Attrition and Headcount
-    metrics['production_agents'] = 84  # Default value
-    metrics['delta'] = metrics['production_agents'] - 0 + (0 / 68.63)
-    metrics['delta_percent'] = (metrics['delta'] / metrics['production_agents']) * 100
-    
-    metrics['contractual_hours_increase'] = 0  # Default value
-    metrics['new_hires_48'] = 0  # Default value
-    metrics['new_hires_24'] = 0  # Default value
-    metrics['movements_in_48'] = 0  # Default value
-    metrics['movements_in_24'] = 0  # Default value
-    metrics['movements_out_48'] = 0  # Default value
-    metrics['movements_out_24'] = 0  # Default value
-    metrics['attrition_48'] = 0  # Default value
-    metrics['attrition_24'] = -5  # Default value
-    metrics['dismissals_48'] = 0  # Default value
-    metrics['dismissals_24'] = 0  # Default value
-    
-    metrics['head_count_agents'] = metrics['production_agents']
-    metrics['agents_assigned_to_lob'] = 89  # Default value
-    metrics['initial_training_heads'] = 0  # Default value
-    metrics['initial_training_hours_paid'] = 0  # Default value
-    metrics['initial_training_hours_no_paid'] = 0  # Default value
-    metrics['attrition'] = metrics['attrition_48'] * 0.5 + metrics['attrition_24']
-    metrics['pivotal_hours'] = 0  # Default value
-    metrics['new_hires'] = metrics['new_hires_48'] * 0.5 + metrics['new_hires_24']
-    metrics['movements_in_1'] = metrics['movements_in_48']
-    metrics['movements_in_2'] = 0  # Default value
-    metrics['movements_out_1'] = metrics['movements_out_48']
-    metrics['movements_out_2'] = 0  # Default value
-    metrics['long_term_loams'] = 0  # Default value
-    metrics['suspensions'] = 0  # Default value
-    metrics['unpaid_leaves'] = 0  # Default value
-    
-    # Diurno and Nocturno
-    metrics['diurno_percent'] = 100.00  # Default value
-    metrics['nocturno_percent'] = 0.00  # Default value
-    metrics['diurno_festivo_percent'] = 0.00  # Default value
-    metrics['nocturno_festivo_percent'] = 0.00  # Default value
-    
-    return metrics
-
-# Display results
-metrics = calculate_metrics(st.session_state.data)
-
-# Display results in vertical format
-st.header("Results")
-
-# Inbound Metrics
-st.subheader("Inbound Metrics")
-st.write("Offered Calls (#)", f"{metrics['offered_calls']:,}")
-st.write("Handled Calls (#)", f"{metrics['handled_calls']:,}")
-st.write("Acceptable Calls (#)", f"{metrics['acceptable_calls']:,}")
-st.write("Inbound AHT (Sec)", f"{metrics['inbound_aht']:.2f} sec")
-st.write("Inbound POCC (%)", f"{st.session_state.data['inbound_pocc']:.2f}%")
-
-# Productivity Metrics
-st.subheader("Productivity Metrics")
-st.write("Transactional Hours", f"{metrics['inbound_transactional_hours']:.2f} hrs")
-st.write("Productive Hours", f"{metrics['inbound_productive_hours']:.2f} hrs")
-
-# Shrinkage
-st.subheader("Shrinkage")
-st.write("In-Office Shrinkage", f"{metrics['in_office_shrinkage_hours']:.2f} hrs")
-st.write("Out-Office Shrinkage", f"{metrics['out_office_shrinkage_hours']:.2f} hrs")
-
-# Occupancy
-st.subheader("Occupancy")
-st.write("Phone Occupancy (POCC)", f"{metrics['pocc']:.2f}%")
-st.write("In-Chair Occupancy (IOCC)", f"{metrics['iocc']:.2f}%")
-st.write("Effective Occupancy (EOCC)", f"{metrics['eocc']:.2f}%")
-
-# Attrition and Headcount
-st.subheader("Attrition and Headcount")
-st.write("Delta", f"{metrics['delta']:.2f}")
-st.write("Delta %", f"{metrics['delta_percent']:.2f}%")
-st.write("Head Count Agents", f"{metrics['head_count_agents']:,}")
-st.write("Agents Assigned to LOB", f"{metrics['agents_assigned_to_lob']:,}")
-
-# Diurno and Nocturno
-st.subheader("Diurno and Nocturno")
-st.write("% Diurno", f"{metrics['diurno_percent']:.2f}%")
-st.write("% Nocturno", f"{metrics['nocturno_percent']:.2f}%")
-st.write("% Diurno Festivo", f"{metrics['diurno_festivo_percent']:.2f}%")
-st.write("% Nocturno Festivo", f"{metrics['nocturno_festivo_percent']:.2f}%")
-
-if __name__ == "__main__":
-    st.write("Adjust the input parameters in the sidebar to see the results update automatically.")
+    metrics['weeks'] = data.get('weeks', 4.345)
+    metrics['average_weekly_contract'] = metrics['total_productive_hours'] / metrics['weeks']
+    metrics['maximum_weekly_contract'] = data.get('maximum_weekly_contract', 48.00)
+    metrics['peak_seat_capacity'] = data.get('peak_seat_capacity', 0)
+    metrics['seat_sharing_ratio'] = data.get('seat_sharing_ratio', 1.00)
