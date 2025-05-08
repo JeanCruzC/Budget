@@ -108,7 +108,6 @@ input_structure = {
         "%Nocturno Festivo"
     ]
 }
-
 # Secciones sin dimensión mensual
 single_sections = ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
 
@@ -138,19 +137,23 @@ for section, labels in input_structure.items():
 # --- 5️⃣ Construir DataFrame ---
 df = pd.DataFrame(all_inputs, index=months)
 
-# --- 6️⃣ Calcular métricas ---
+# Copiar a columna estándar para fórmulas
+if "Inbound Agreed AHT ForeCast" in df.columns:
+    df["Inbound AHT (Sec)"] = df["Inbound Agreed AHT ForeCast"]
+
+# --- 6️⃣ Definir métricas y calcularlas ---
 metrics = []
 # Inbound
 metrics += [
     ("Offered Calls (#)", lambda r: r["Inbound Agreed Volume ForeCast"]),
-    ("Handled Calls (#)", lambda r: r["Inbound Client AHT ForeCast"] * r["Offered Calls (#)" ]),
-    ("Acceptable Calls (#)", lambda r: max(0, r["Offered Calls (#)"] * r["Inbound POCC (%)"])),
-    ("INBOUND TRANSACTIONAL HOURS", lambda r: r["Offered Calls (#)"] * r["Inbound Agreed AHT ForeCast"] / 3600),
+    ("Handled Calls (#)", lambda r: r["Offered Calls (#)"] * r["Inbound AHT (Sec)" ]),
+    ("Acceptable Calls (#)", lambda r: max(0, r["Handled Calls (#)"] * r["Inbound POCC (%)"])),
+    ("INBOUND TRANSACTIONAL HOURS", lambda r: r["Offered Calls (#)"] * r["Inbound AHT (Sec)"] / 3600),
     ("INBOUND PRODUCTIVE HOURS", lambda r: r["Handled Calls (#)"] - r["Acceptable Calls (#)"])
 ]
 # Outgoing
 metrics += [
-    ("Outgoing Generation %", lambda r: r["Outgoing Volume Forecast"] / r["Inbound Client Volume ForeCast"] if r["Inbound Client Volume ForeCast"] else 0),
+    ("Outgoing Generation %", lambda r: r["Outgoing Volume Forecast"] / r.get("Inbound Client Volume ForeCast", 1) if r.get("Inbound Client Volume ForeCast", 0) else 0),
     ("OUTGOING TRANSACTIONAL HOURS", lambda r: r["Outgoing Volume Forecast"] * r["Outgoing AHT (Sec)"] / 3600),
     ("OUTGOING PRODUCTIVE HOURS", lambda r: r["Outgoing Volume Forecast"] * r["Outgoing Generation %"])
 ]
@@ -162,26 +165,26 @@ metrics += [
 ]
 # Backoffice
 metrics += [
-    ("Backoffice Generation %", lambda r: r["Backoffice Volume Handled"] / r["Inbound Client Volume ForeCast"] if r["Inbound Client Volume ForeCast"] else 0),
+    ("Backoffice Generation %", lambda r: r["Backoffice Volume Handled"] / r.get("Inbound Agreed Volume ForeCast", 1) if r.get("Inbound Agreed Volume ForeCast", 0) else 0),
     ("BACKOFFICE TRANSACTIONAL HOURS", lambda r: r["Backoffice Volume Forecast"] * r["Backoffice (Ratio/h)"] / 3600),
     ("BACKOFFICE PRODUCTIVE HOURS", lambda r: r["Backoffice Volume Handled"])
 ]
 # Email
 metrics += [
-    ("EMAIL TRANSACTIONAL HOURS", lambda r: r["Email Volume Handled"] * (3600 / r["Email AHT (Sec)"]) / 3600),
+    ("EMAIL TRANSACTIONAL HOURS", lambda r: r["Email Volume Handled"] * (3600 / r["Email AHT (Sec)"]) / 3600 if r.get("Email AHT (Sec)", 0) else 0),
     ("EMAIL PRODUCTIVE HOURS", lambda r: r["Email Volume Handled"])
 ]
 # Chat
 metrics += [
-    ("CHAT TRANSACTIONAL HOURS", lambda r: (r["Chat Volume Forecast"] * r["Chat AHT"] / 3600) / r["Chat Concurrency"] if r["Chat Concurrency"] else 0),
+    ("CHAT TRANSACTIONAL HOURS", lambda r: (r["Chat Volume Forecast"] * r["Chat AHT"] / 3600) / r.get("Chat Concurrency", 1) if r.get("Chat Concurrency", 0) else 0),
     ("CHAT PRODUCTIVE HOURS", lambda r: r["Chat Handled"])
 ]
-# Social media
+# Social Media
 metrics += [
-    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda r: (r["S. Media Volume Forecast"] * r["S. Media AHT"] / 3600) / r["S. Media Concurrency"] if r["S. Media Concurrency"] else 0),
+    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda r: (r["S. Media Volume Forecast"] * r["S. Media AHT"] / 3600) / r.get("S. Media Concurrency", 1) if r.get("S. Media Concurrency", 0) else 0),
     ("SOCIAL MEDIA PRODUCTIVE HOURS", lambda r: r["S. Media Handled"])
 ]
-# Totals
+# Totales
 metrics += [
     ("TOTAL TRANSACTIONAL HOURS", lambda r: sum(r[c] for c, _ in metrics if "TRANSACTIONAL" in c)),
     ("TOTAL PRODUCTIVE HOURS", lambda r: sum(r[c] for c, _ in metrics if "PRODUCTIVE" in c))
