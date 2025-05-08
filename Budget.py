@@ -232,10 +232,42 @@ metrics += [
 for name, func in metrics:
     df[name] = df.apply(func, axis=1)
 
-# --- 7️⃣ Mostrar resultados en UI ---
-st.markdown("---")
-st.header("📈 Resultados Computados")
-st.dataframe(df, use_container_width=True)
+# --- 7️⃣ Mostrar resultados en UI por sección ---
+# Definir métricas por sección para mostrar inline
+def_section_metrics = {
+    "INBOUND ACTIVITY": [
+        "Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)",
+        "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS"
+    ],
+    "OUTGOING ACTIVITY": [
+        "Outgoing Generation %", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS"
+    ],
+    "OUTBOUND ACTIVITY": [
+        "Outbound Closed records", "OUTBOUND TRANSACTIONAL HOURS", "OUTBOUND PRODUCTIVE HOURS"
+    ],
+    "BACKOFFICE ACTIVITY": [
+        "Backoffice Generation %", "BACKOFFICE TRANSACTIONAL HOURS", "BACKOFFICE PRODUCTIVE HOURS"
+    ],
+    "EMAIL ACTIVITY": [
+        "EMAIL TRANSACTIONAL HOURS", "EMAIL PRODUCTIVE HOURS"
+    ],
+    "CHAT ACTIVITY": [
+        "CHAT TRANSACTIONAL HOURS", "CHAT PRODUCTIVE HOURS"
+    ],
+    "SOCIAL MEDIA": [
+        "SOCIAL MEDIA TRANSACTIONAL HOURS", "SOCIAL MEDIA PRODUCTIVE HOURS"
+    ],
+    # Shrinkages y totales opcionales
+    "": []
+}
+
+for section, labels in input_structure.items():
+    if section in def_section_metrics and def_section_metrics[section]:
+        st.markdown("---")
+        st.subheader(f"{section} — Calculados")
+        df_section = df[def_section_metrics[section]].copy()
+        df_section.index.name = "Month"
+        st.dataframe(df_section, use_container_width=True)
 
 # --- 8️⃣ Mostrar valores únicos ---
 if single_inputs:
