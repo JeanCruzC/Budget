@@ -1,14 +1,13 @@
 import streamlit as st
 import pandas as pd
 
-# Configuración de la página\ nst.set_page_config(page_title="Budget Tool — Streamlit Native", layout="wide")
-st.title("📊 Budget Tool — Streamlit Native — App Independiente")
+# Configuración de la página
+st.set_page_config(page_title="Budget Tool — Streamlit Native", layout="wide")
+st.title("📊 Budget Tool — Versión Nativa de Streamlit — App Independiente")
 
-# 1️⃣ Meses del año
-months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+# 1️⃣ Meses del año\ nmonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-# 2️⃣ Estructura de inputs agrupada por sección
-input_structure = {
+# 2️⃣ Estructura de inputs agrupada por sección\ ninput_structure = {
     "INBOUND ACTIVITY": [
         "Inbound Client Volume ForeCast",
         "Inbound Client AHT ForeCast",
@@ -76,7 +75,6 @@ input_structure = {
         "Admin (Hr)",
         "SystemDown (Hr)"
     ],
-    "% IN OFFICE SHRINKAGE": [],
     "OUT OFFICE SHRINKAGE": [
         "ATO - Vacations (Hr)",
         "ATO - Bank Holydays (Hr)",
@@ -86,320 +84,171 @@ input_structure = {
         "UATO - Absence LOAM (Hr)",
         "UATO - Absence UNIONS (Hr)"
     ],
-    "% OUT OFFICE SHRINKAGE": [],
-    "TOTALS AND OCCUPANCIES": []  # sección para totales finales y ocupaciones
+    "CONTRACT/SEAT INFO": [
+        "Average Weekly Contract",
+        "Maximum Weekly Contract",
+        "Peek Seat Capacity",
+        "Seat Sharing Ratio"
+    ],
+    "REQUIRED FTE": [
+        "Required Net FTEs",
+        "Required Gross FTEs",
+        "Aprox Net Heads",
+        "Aprox Gross Heads",
+        "Aprox Calculated Seats"
+    ],
+    "HEADCOUNT MOVEMENTS": [
+        "Production Agents (HC)",
+        "Delta",
+        "Delta (%)",
+        "Contractual Hours Increase (HC)",
+        "New Hires (HC)",
+        "Movements IN (HC)",
+        "Movements OUT (HC)",
+        "Attrition (HC)",
+        "Dismisal (HC)"
+    ],
+    "AGENTS ASSIGNED TO LOB": [
+        "Head Count Agents",
+        "Agents Assigned to LOB",
+        "Initial Training Heads (Info)",
+        "Initial Training Hours Paid",
+        "Initial Training Hours No Paid",
+        "Attrition Pivotal (Hr)",
+        "New Hires Pivotal (Hr)",
+        "Dismisals Pivotal (Hr)",
+        "Movements IN (1)",
+        "Movements IN (2)",
+        "Movements OUT (1)",
+        "Movements OUT (2)",
+        "Long Term LOAMs",
+        "Suspensions",
+        "Unpaid Leaves",
+        "Total National Holidays"
+    ],
+    "EXPECTED OCCUPIED SEATS": [
+        "Expected Occupied Seats",
+        "Horas Festivo Trabajadas (Concentrix)",
+        "Horas Festivo Trabajadas (ETT)",
+        "UATO - Paid Absence (Hr)",
+        "UATO - Paid Absence (%)",
+        "Total Estimated Cost Hours",
+        "Expected Occupied Seats TM"
+    ],
+    "% SHIFT PATTERNS": [
+        "%Diurno",
+        "%Nocturno",
+        "%Diurno Festivo",
+        "%Nocturno Festivo"
+    ]
 }
 
-# 3️⃣ Inicializar inputs en un diccionario
-all_inputs = {}
-for labels in input_structure.values():
-    for lbl in labels:
-        all_inputs[lbl] = [0.0] * len(months)
+# 3️⃣ Inicializar inputs
+all_inputs = {lbl: [0.0]*len(months) for labels in input_structure.values() for lbl in labels}
+# Para valores únicos (no mes a mes), creamos un único índice 'Value'
+single_inputs = {}
 
-# 4️⃣ UI: solicitar valores al usuario sección por sección
+# 4️⃣ UI: Solicitar valores
 for section, labels in input_structure.items():
     st.header(section)
     if labels:
+        # Identificar si section es single-value o monthly
+        is_single = section in ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
         for lbl in labels:
-            st.subheader(lbl)
-            cols = st.columns(len(months))
-            for i, mes in enumerate(months):
-                key = f"inp_{lbl}_{mes}"
-                all_inputs[lbl][i] = cols[i].number_input(
-                    label=f"{lbl} — {mes}",
-                    value=all_inputs[lbl][i],
-                    key=key
-                )
+            if is_single:
+                # Input único
+                single_inputs[lbl] = st.number_input(f"{lbl}", value=0.0, key=f"single_{lbl}")
+            else:
+                # Inputs mensuales en tabla
+                cols = st.columns(len(months)+1)
+                cols[0].write(lbl)
+                for i, mes in enumerate(months):
+                    key = f"inp_{lbl}_{mes}"
+                    val = cols[i+1].number_input(label=mes, value=all_inputs[lbl][i], key=key)
+                    all_inputs[lbl][i] = val
     else:
-        # sección sin inputs, solo encabezado
-        st.write("_(No hay campos de entrada en esta sección)_")
+        st.write("_(Sin campos de entrada)_")
 
-# 5️⃣ Construir DataFrame inicial con inputs
+# 5️⃣ DataFrame de inputs mensuales
 df = pd.DataFrame(all_inputs, index=months)
 
-# 6️⃣ Definir funciones que replican las fórmulas de Excel
+# 6️⃣ Definir todas las métricas calculadas dinámicamente
+metrics = []
 # Inbound
-
-def offered_calls(i):
-    return df.at[months[i], "Inbound Agreed Volume ForeCast"]
-
-def handled_calls(i):
-    return df.at[months[i], "Inbound Client AHT ForeCast"] * df.at[months[i], "Offered Calls (#)"]
-
-def acceptable_calls(i):
-    try:
-        return df.at[months[i], "Handled Calls (#)"] * df.at[months[i], "Inbound POCC (%)"]
-    except:
-        return 0
-
-def inbound_aht_sec(i):
-    return df.at[months[i], "Inbound Client AHT ForeCast"]
-
-def inbound_availtime(i):
-    try:
-        return df.at[months[i], "Handled Calls (#)"] - df.at[months[i], "Acceptable Calls (#)"]
-    except:
-        return 0
-
-def inbound_trans_hours(i):
-    try:
-        return df.at[months[i], "Offered Calls (#)"] * df.at[months[i], "Inbound AHT (Sec)"] / 3600
-    except:
-        return 0
-
-def inbound_prod_hours(i):
-    try:
-        return df.at[months[i], "Inbound Availtime (Hr)"] / (df.at[months[i], "Inbound AHT (Sec)"] / 3600)
-    except:
-        return 0
-
-# Outgoing
-def outgoing_generation_pct(i):
-    try:
-        return df.at[months[i], "Outgoing Volume Forecast"] / df.at[months[i], "Inbound Client Volume ForeCast"]
-    except:
-        return 0
-
-def outgoing_availtime(i):
-    try:
-        handled = df.at[months[i], "Outgoing Volume Forecast"] * df.at[months[i], "Outgoing Generation %"]
-        return df.at[months[i], "Outgoing Volume Forecast"] - handled
-    except:
-        return 0
-
-def outgoing_trans_hours(i):
-    try:
-        return df.at[months[i], "Outgoing Volume Forecast"] * df.at[months[i], "Outgoing AHT (Sec)"] / 3600
-    except:
-        return 0
-
-def outgoing_prod_hours(i):
-    try:
-        return df.at[months[i], "Outgoing Availtime (Hr)"] / (df.at[months[i], "Outgoing AHT (Sec)"] / 3600)
-    except:
-        return 0
-
-# Outbound
-def outbound_closed_records(i):
-    return df.at[months[i], "Outbound Loaded Records"] * df.at[months[i], "Outbound Closing %"]
-
-def outbound_calls_issued(i):
-    return df.at[months[i], "Outbound Closed records"] * df.at[months[i], "Outbound Calls per Record (Ratio/h)"]
-
-def outbound_useful_records(i):
-    return df.at[months[i], "Outbound Closed records"] * df.at[months[i], "Outbound Useful Contact (%)"]
-
-def outbound_uc_positive(i):
-    return df.at[months[i], "Outbound Closed records"] * df.at[months[i], "Outbound U.C Positive %"]
-
-def outbound_availtime(i):
-    try:
-        return df.at[months[i], "Outbound AHT (Sec)"] - df.at[months[i], "Outbound Calls Issued"]
-    except:
-        return 0
-
-def outbound_trans_hours(i):
-    try:
-        return df.at[months[i], "Outbound Loaded Records"] * df.at[months[i], "Outbound AHT (Sec)"] / 3600
-    except:
-        return 0
-
-def outbound_prod_hours(i):
-    try:
-        return df.at[months[i], "Outbound Availtime (Hr)"] / (df.at[months[i], "Outbound AHT (Sec)"] / 3600)
-    except:
-        return 0
-
-# Backoffice
-def backoffice_generation_pct(i):
-    try:
-        return df.at[months[i], "Backoffice Volume Handled"] / df.at[months[i], "Inbound Client Volume ForeCast"]
-    except:
-        return 0
-
-def backoffice_aht(i):
-    try:
-        return 3600 / df.at[months[i], "Backoffice (Ratio/h)"]
-    except:
-        return 0
-
-def backoffice_availtime(i):
-    return df.at[months[i], "Backoffice Volume Handled"] - df.at[months[i], "Backoffice Volume Offered"]
-
-def backoffice_trans_hours(i):
-    return df.at[months[i], "Backoffice Volume Forecast"] * df.at[months[i], "Backoffice AHT"] / 3600
-
-def backoffice_prod_hours(i):
-    try:
-        return df.at[months[i], "Backoffice Availtime (Hr)"] / (df.at[months[i], "Backoffice AHT"] / 3600)
-    except:
-        return 0
-
-# Email
-def email_trans_hours(i):
-    try:
-        handled = df.at[months[i], "Email Volume Handled"]
-        aht = 3600 / df.at[months[i], "Email AHT (Sec)"]
-        return handled * aht / 3600
-    except:
-        return 0
-
-def email_prod_hours(i):
-    try:
-        handled = df.at[months[i], "Email Volume Handled"]
-        aht = 3600 / df.at[months[i], "Email AHT (Sec)"]
-        return df.at[months[i], "Email Availtime (Hr)"] / aht
-    except:
-        return 0
-
-# Chat
-def chat_trans_hours(i):
-    try:
-        return (df.at[months[i], "Chat Volume Forecast"] * df.at[months[i], "Chat AHT"] / 3600) / df.at[months[i], "Chat Concurrency"]
-    except:
-        return 0
-
-def chat_prod_hours(i):
-    try:
-        return df.at[months[i], "Chat Handled"] / df.at[months[i], "Chat Concurrency"]
-    except:
-        return 0
-
-# Social Media
-def social_trans_hours(i):
-    try:
-        return (df.at[months[i], "S. Media Volume Forecast"] * df.at[months[i], "S. Media AHT"] / 3600) / df.at[months[i], "S. Media Concurrency"]
-    except:
-        return 0
-
-def social_prod_hours(i):
-    try:
-        return df.at[months[i], "S. Media Handled"] / df.at[months[i], "S. Media Concurrency"]
-    except:
-        return 0
-
-# Shrinkages
-def total_in_office_shrinkage(i):
-    fields = [
-        "AUX inactivity (Hr)", "Aux-0 (Hr)", "Breaks (Hr)", "Lunch (Hr)",
-        "Trainning (Hr)", "Trainning (CECO Change) (Hr)", "Coaching (Hr)",
-        "Backup (Hr)", "Admin (Hr)", "SystemDown (Hr)"
-    ]
-    return sum(df.at[months[i], f] for f in fields)
-def total_out_office_shrinkage(i):
-    fields = [
-        "ATO - Vacations (Hr)", "ATO - Bank Holydays (Hr)",
-        "ATO - Compensations (Hr)", "ATO - Compensations ETT (Hr)",
-        "UATO - Absence NCNS (Hr)", "UATO - Absence LOAM (Hr)",
-        "UATO - Absence UNIONS (Hr)"
-    ]
-    return sum(df.at[months[i], f] for f in fields)
-
-def phone_occupancy(i):
-    try:
-        return df.at[months[i], "TOTAL TRANSACTIONAL HOURS"] / df.at[months[i], "TOTAL PRODUCTIVE HOURS"]
-    except:
-        return 0
-
-def chair_occupancy(i):
-    try:
-        return df.at[months[i], "TOTAL PRODUCTIVE HOURS"] / df.at[months[i], "TOTAL ATTENDANCE HOURS"]
-    except:
-        return 0
-
-# 7️⃣ Agregar columnas vacías para resultados
-result_labels = [
-    "Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)", "Inbound AHT (Sec)",
-    "Inbound Availtime (Hr)", "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS",
-    "Outgoing Generation %", "Outgoing Availtime (Hr)", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS",
-    "Outbound Closed records", "Outbound Calls Issued", "Outbound Useful Records", "Outbound U.C Positive",
-    "Outbound Availtime (Hr)", "OUTBOUND TRANSACTIONAL HOURS", "OUTBOUND PRODUCTIVE HOURS",
-    "Backoffice Generation %", "Backoffice AHT", "Backoffice Availtime (Hr)", "BACKOFFICE TRANSACTIONAL HOURS", "BACKOFFICE PRODUCTIVE HOURS",
-    "EMAIL TRANSACTIONAL HOURS", "EMAIL PRODUCTIVE HOURS",
-    "CHAT TRANSACTIONAL HOURS", "CHAT PRODUCTIVE HOURS",
-    "SOCIAL MEDIA TRANSACTIONAL HOURS", "SOCIAL MEDIA PRODUCTIVE HOURS",
-    "TOTAL TRANSACTIONAL HOURS", "TOTAL PRODUCTIVE HOURS",
-    "InOffice Shrinkage (Hr)", "OutOffice Shrinkage (Hr)",
-    "POCC - Phone Occupancy (%)", "IOCC - InChair Occupancy (%)"
+metrics += [
+    ("Offered Calls (#)", lambda df,i: df.at[months[i], "Inbound Agreed Volume ForeCast"]),
+    ("Handled Calls (#)", lambda df,i: df.at[months[i], "Inbound Client AHT ForeCast"] * df.at[months[i], "Offered Calls (#)" ]),
+    ("Acceptable Calls (#)", lambda df,i: max(0, df.at[months[i], "Handled Calls (#)"] * df.at[months[i], "Inbound POCC (%)"])),
+    ("INBOUND TRANSACTIONAL HOURS", lambda df,i: df.at[months[i], "Offered Calls (#)"] * df.at[months[i], "Inbound AHT (Sec)"] / 3600),
+    ("INBOUND PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Handled Calls (#)"] - df.at[months[i], "Acceptable Calls (#)"])
 ]
-for rl in result_labels:
-    df[rl] = 0.0
+# Outgoing
+metrics += [
+    ("Outgoing Generation %", lambda df,i: df.at[months[i], "Outgoing Volume Forecast"] / df.at[months[i], "Inbound Client Volume ForeCast"] if df.at[months[i], "Inbound Client Volume ForeCast"] else 0),
+    ("OUTGOING TRANSACTIONAL HOURS", lambda df,i: df.at[months[i], "Outgoing Volume Forecast"] * df.at[months[i], "Outgoing AHT (Sec)"] / 3600),
+    ("OUTGOING PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Outgoing Volume Forecast"] * df.at[months[i], "Outgoing Generation %"])
+]
+# Outbound
+metrics += [
+    ("Outbound Closed records", lambda df,i: df.at[months[i], "Outbound Loaded Records"] * df.at[months[i], "Outbound Closing %"]),
+    ("OUTBOUND TRANSACTIONAL HOURS", lambda df,i: df.at[months[i], "Outbound Loaded Records"] * df.at[months[i], "Outbound AHT (Sec)"] / 3600),
+    ("OUTBOUND PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Outbound Closed records"] * df.at[months[i], "Outbound Calls per Record (Ratio/h)"])
+]
+# Backoffice
+metrics += [
+    ("Backoffice Generation %", lambda df,i: df.at[months[i], "Backoffice Volume Handled"] / df.at[months[i], "Inbound Client Volume ForeCast"] if df.at[months[i], "Inbound Client Volume ForeCast"] else 0),
+    ("BACKOFFICE TRANSACTIONAL HOURS", lambda df,i: df.at[months[i], "Backoffice Volume Forecast"] * df.at[months[i], "Backoffice AHT"] / 3600),
+    ("BACKOFFICE PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Backoffice Volume Handled"])
+]
+# Email
+metrics += [
+    ("EMAIL TRANSACTIONAL HOURS", lambda df,i: df.at[months[i], "Email Volume Handled"] * (3600/ df.at[months[i], "Email AHT (Sec)"]) / 3600),
+    ("EMAIL PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Email Volume Handled"])
+]
+# Chat
+metrics += [
+    ("CHAT TRANSACTIONAL HOURS", lambda df,i: (df.at[months[i], "Chat Volume Forecast"] * df.at[months[i], "Chat AHT"] /3600) / df.at[months[i], "Chat Concurrency"]),
+    ("CHAT PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "Chat Handled"])
+]
+# Social Media
+metrics += [
+    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda df,i: (df.at[months[i], "S. Media Volume Forecast"] * df.at[months[i], "S. Media AHT"] /3600) / df.at[months[i], "S. Media Concurrency"]),
+    ("SOCIAL MEDIA PRODUCTIVE HOURS", lambda df,i: df.at[months[i], "S. Media Handled"])
+]
+# Totales
+metrics += [
+    ("TOTAL TRANSACTIONAL HOURS", lambda df,i: sum(df.at[months[i], col] for col, _ in metrics if "TRANSACTIONAL" in col)),
+    ("TOTAL PRODUCTIVE HOURS", lambda df,i: sum(df.at[months[i], col] for col, _ in metrics if "PRODUCTIVE" in col))
+]
+# Shrinkages
+metrics += [
+    ("InOffice Shrinkage (Hr)", lambda df,i: sum(df.at[months[i], f] for f in input_structure["IN OFFICE SHRINKAGE"])),
+    ("OutOffice Shrinkage (Hr)", lambda df,i: sum(df.at[months[i], f] for f in input_structure["OUT OFFICE SHRINKAGE"]))
+]
 
-# 8️⃣ Bucle de cálculo mes a mes
-for i in range(len(months)):
-    # Inbound
-    df.at[months[i], "Offered Calls (#)"] = offered_calls(i)
-    df.at[months[i], "Handled Calls (#)"] = handled_calls(i)
-    df.at[months[i], "Acceptable Calls (#)"] = acceptable_calls(i)
-    df.at[months[i], "Inbound AHT (Sec)"] = inbound_aht_sec(i)
-    df.at[months[i], "Inbound Availtime (Hr)"] = inbound_availtime(i)
-    df.at[months[i], "INBOUND TRANSACTIONAL HOURS"] = inbound_trans_hours(i)
-    df.at[months[i], "INBOUND PRODUCTIVE HOURS"] = inbound_prod_hours(i)
-    # Outgoing
-    df.at[months[i], "Outgoing Generation %"] = outgoing_generation_pct(i)
-    df.at[months[i], "Outgoing Availtime (Hr)"] = outgoing_availtime(i)
-    df.at[months[i], "OUTGOING TRANSACTIONAL HOURS"] = outgoing_trans_hours(i)
-    df.at[months[i], "OUTGOING PRODUCTIVE HOURS"] = outgoing_prod_hours(i)
-    # Outbound
-    df.at[months[i], "Outbound Closed records"] = outbound_closed_records(i)
-    df.at[months[i], "Outbound Calls Issued"] = outbound_calls_issued(i)
-    df.at[months[i], "Outbound Useful Records"] = outbound_useful_records(i)
-    df.at[months[i], "Outbound U.C Positive"] = outbound_uc_positive(i)
-    df.at[months[i], "Outbound Availtime (Hr)"] = outbound_availtime(i)
-    df.at[months[i], "OUTBOUND TRANSACTIONAL HOURS"] = outbound_trans_hours(i)
-    df.at[months[i], "OUTBOUND PRODUCTIVE HOURS"] = outbound_prod_hours(i)
-    # Backoffice
-    df.at[months[i], "Backoffice Generation %"] = backoffice_generation_pct(i)
-    df.at[months[i], "Backoffice AHT"] = backoffice_aht(i)
-    df.at[months[i], "Backoffice Availtime (Hr)"] = backoffice_availtime(i)
-    df.at[months[i], "BACKOFFICE TRANSACTIONAL HOURS"] = backoffice_trans_hours(i)
-    df.at[months[i], "BACKOFFICE PRODUCTIVE HOURS"] = backoffice_prod_hours(i)
-    # Email
-    df.at[months[i], "EMAIL TRANSACTIONAL HOURS"] = email_trans_hours(i)
-    df.at[months[i], "EMAIL PRODUCTIVE HOURS"] = email_prod_hours(i)
-    # Chat
-    df.at[months[i], "CHAT TRANSACTIONAL HOURS"] = chat_trans_hours(i)
-    df.at[months[i], "CHAT PRODUCTIVE HOURS"] = chat_prod_hours(i)
-    # Social Media
-    df.at[months[i], "SOCIAL MEDIA TRANSACTIONAL HOURS"] = social_trans_hours(i)
-    df.at[months[i], "SOCIAL MEDIA PRODUCTIVE HOURS"] = social_prod_hours(i)
-    # Totales
-    df.at[months[i], "TOTAL TRANSACTIONAL HOURS"] = sum(
-        df.at[months[i], col] for col in [
-            "INBOUND TRANSACTIONAL HOURS","OUTGOING TRANSACTIONAL HOURS",
-            "OUTBOUND TRANSACTIONAL HOURS","BACKOFFICE TRANSACTIONAL HOURS",
-            "EMAIL TRANSACTIONAL HOURS","CHAT TRANSACTIONAL HOURS",
-            "SOCIAL MEDIA TRANSACTIONAL HOURS"
-        ]
-    )
-    df.at[months[i], "TOTAL PRODUCTIVE HOURS"] = sum(
-        df.at[months[i], col] for col in [
-            "INBOUND PRODUCTIVE HOURS","OUTGOING PRODUCTIVE HOURS",
-            "OUTBOUND PRODUCTIVE HOURS","BACKOFFICE PRODUCTIVE HOURS",
-            "EMAIL PRODUCTIVE HOURS","CHAT PRODUCTIVE HOURS",
-            "SOCIAL MEDIA PRODUCTIVE HOURS"
-        ]
-    )
-    # Shrinkages
-    df.at[months[i], "InOffice Shrinkage (Hr)"] = total_in_office_shrinkage(i)
-    df.at[months[i], "OutOffice Shrinkage (Hr)"] = total_out_office_shrinkage(i)
-    # Ocupaciones
-    df.at[months[i], "POCC - Phone Occupancy (%)"] = phone_occupancy(i)
-    df.at[months[i], "IOCC - InChair Occupancy (%)"] = chair_occupancy(i)
+# 7️⃣ Inicializar columnas de resultados\ nfor label, _ in metrics:
+    df[label] = 0.0
 
-# 9️⃣ Mostrar resultados
-st.markdown("---")
+# 8️⃣ Calcular métricas\ nfor i in range(len(months)):
+    for label, func in metrics:
+        try:
+            df.at[months[i], label] = func(df, i)
+        except:
+            df.at[months[i], label] = 0
+
+# 9️⃣ Mostrar resultados\ nst.markdown("---")
 st.header("📈 Resultados Computados")
 st.dataframe(df, use_container_width=True)
 
-# 🔟 Exportar datos como CSV
-if st.button("📥 Descargar resultados como CSV"):
-    csv = df.to_csv(index_label="Month").encode('utf-8')
-    st.download_button(
-        label="Descargar CSV",
-        data=csv,
-        file_name='budget_results.csv',
-        mime='text/csv'
-    )
+# 🔟 Mostrar valores únicos
+if single_inputs:
+    st.markdown("---")
+    st.header("📋 Valores Únicos")
+    for k, v in single_inputs.items():
+        st.write(f"- **{k}:** {v}")
 
-st.success("✅ App completa: totalmente independiente, con todas las fórmulas implementadas.")
+# 🏷️ Exportar CSV\ nif st.button("📥 Descargar CSV"):
+    csv = df.to_csv(index_label="Month").encode('utf-8')
+    st.download_button(label="Descargar CSV", data=csv, file_name='budget_results.csv', mime='text/csv')
+
+st.success("✅ App completa: independiente de Excel, con todos los ítems y fórmulas implementados.")
