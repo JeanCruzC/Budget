@@ -92,42 +92,6 @@ input_structure = {
         "Peak Seat Capacity",
         "Seat Sharing Ratio"
     ],
-    "REQUIRED FTE": [
-        "Required Net FTEs",
-        "Required Gross FTEs",
-        "Approx Net Heads",
-        "Approx Gross Heads",
-        "Approx Calculated Seats"
-    ],
-    "HEADCOUNT MOVEMENTS": [
-        "Production Agents (HC)",
-        "Delta",
-        "Delta (%)",
-        "Contractual Hours Increase (HC)",
-        "New Hires (HC)",
-        "Movements IN (HC)",
-        "Movements OUT (HC)",
-        "Attrition (HC)",
-        "Dismissal (HC)"
-    ],
-    "AGENTS ASSIGNED TO LOB": [
-        "Head Count Agents",
-        "Agents Assigned to LOB",
-        "Initial Training Heads (Info)",
-        "Initial Training Hours Paid",
-        "Initial Training Hours Not Paid",
-        "Attrition Pivotal (Hr)",
-        "New Hires Pivotal (Hr)",
-        "Dismissals Pivotal (Hr)",
-        "Movements IN (1)",
-        "Movements IN (2)",
-        "Movements OUT (1)",
-        "Movements OUT (2)",
-        "Long-Term LOAMs",
-        "Suspensions",
-        "Unpaid Leaves",
-        "Total National Holidays"
-    ],
     "EXPECTED OCCUPIED SEATS": [
         "Expected Occupied Seats",
         "Holiday Hours (Concentrix)",
@@ -146,73 +110,41 @@ input_structure = {
 }
 
 # --- 3️⃣ Inicializar diccionarios de inputs ---
-all_inputs = {label: [0.0]*len(months) for labels in input_structure.values() for label in labels}
+all_inputs = {label: [0.0] * len(months) for labels in input_structure.values() for label in labels}
 single_inputs = {}
 single_sections = ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
-
-# Definir métricas por sección para mostrar inline antes de renderizar inputs
-# (se usan luego para imprimir cálculos bajo cada sección)
-def_section_metrics = {
-    "INBOUND ACTIVITY": [
-        "Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)",
-        "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS"
-    ],
-    "OUTGOING ACTIVITY": [
-        "Outgoing Generation %", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS"
-    ],
-    "OUTBOUND ACTIVITY": [
-        "Outbound Closed records", "OUTBOUND TRANSACTIONAL HOURS", "OUTBOUND PRODUCTIVE HOURS"
-    ],
-    "BACKOFFICE ACTIVITY": [
-        "Backoffice Generation %", "BACKOFFICE TRANSACTIONAL HOURS", "BACKOFFICE PRODUCTIVE HOURS"
-    ],
-    "EMAIL ACTIVITY": [
-        "EMAIL TRANSACTIONAL HOURS", "EMAIL PRODUCTIVE HOURS"
-    ],
-    "CHAT ACTIVITY": [
-        "CHAT TRANSACTIONAL HOURS", "CHAT PRODUCTIVE HOURS"
-    ],
-    "SOCIAL MEDIA": [
-        "SOCIAL MEDIA TRANSACTIONAL HOURS", "SOCIAL MEDIA PRODUCTIVE HOURS"
-    ],
-    # Shrinkages y totales opcionales
-    "": []
-}
 
 # --- 4️⃣ Renderizar inputs en la UI ---
 for section, labels in input_structure.items():
     st.subheader(section)
     if section in single_sections:
         for lbl in labels:
-            single_inputs[lbl] = st.number_input(lbl, value=0.0, key=f"single_{lbl}")
+            single_inputs[lbl] = st.number_input(lbl, key=f"single_{lbl}", value=0.0)
     else:
-        # Cabecera de tabla mensual
-        cols = st.columns(len(months)+1)
+        cols = st.columns(len(months) + 1)
         cols[0].write("**Item**")
         for i, mes in enumerate(months):
-            cols[i+1].write(f"**{mes}**")
-        # Filas de inputs
+            cols[i + 1].write(f"**{mes}**")
         for lbl in labels:
-            row = st.columns(len(months)+1)
+            row = st.columns(len(months) + 1)
             row[0].write(lbl)
             for i, mes in enumerate(months):
                 key = f"inp_{lbl}_{mes}"
-                val = row[i+1].number_input(label="", value=all_inputs[lbl][i], key=key)
+                val = row[i + 1].number_input("", key=key, value=all_inputs[lbl][i])
                 all_inputs[lbl][i] = val
 
 # --- 5️⃣ Construir DataFrame de inputs mensuales ---
 df = pd.DataFrame(all_inputs, index=months)
 
 # --- 6️⃣ Definir y calcular métricas ---
-# Cada métrica se define como (nombre_columna, función que recibe fila)
 metrics = []
 # Inbound
 metrics += [
     ("Offered Calls (#)", lambda row: row["Inbound Agreed Volume ForeCast"]),
     ("Handled Calls (#)", lambda row: row["Inbound Client AHT ForeCast"] * row["Offered Calls (#)" ]),
-    ("Acceptable Calls (#)", lambda row: max(0, row["Handled Calls (#)"] * row["Inbound POCC (%)"])),
-    ("INBOUND TRANSACTIONAL HOURS", lambda row: row["Offered Calls (#)"] * row["Inbound AHT (Sec)"] / 3600),
-    ("INBOUND PRODUCTIVE HOURS", lambda row: row["Handled Calls (#)"] - row["Acceptable Calls (#)"])
+    ("Acceptable Calls (#)", lambda row: max(0, row["Offered Calls (#)"] * row["Inbound POCC (%)"])),
+    ("INBOUND TRANSACTIONAL HOURS", lambda row: row["Offered Calls (#)"] * row["Inbound Agreed AHT ForeCast"] / 3600),
+    ("INBOUND PRODUCTIVE HOURS", lambda row: row["Handled Calls (#)"] - row["Acceptable Calls (#)")]
 ]
 # Outgoing
 metrics += [
@@ -234,17 +166,17 @@ metrics += [
 ]
 # Email
 metrics += [
-    ("EMAIL TRANSACTIONAL HOURS", lambda row: row["Email Volume Handled"] * (3600/row["Email AHT (Sec)"])/3600),
+    ("EMAIL TRANSACTIONAL HOURS", lambda row: row["Email Volume Handled"] * (3600 / row["Email AHT (Sec)"]) / 3600),
     ("EMAIL PRODUCTIVE HOURS", lambda row: row["Email Volume Handled"])
 ]
 # Chat
 metrics += [
-    ("CHAT TRANSACTIONAL HOURS", lambda row: (row["Chat Volume Forecast"] * row["Chat AHT"] /3600)/ row["Chat Concurrency"]),
+    ("CHAT TRANSACTIONAL HOURS", lambda row: (row["Chat Volume Forecast"] * row["Chat AHT"] / 3600) / row["Chat Concurrency"] if row["Chat Concurrency"] else 0),
     ("CHAT PRODUCTIVE HOURS", lambda row: row["Chat Handled"])
 ]
 # Social Media
 metrics += [
-    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda row: (row["S. Media Volume Forecast"] * row["S. Media AHT"] /3600)/ row["S. Media Concurrency"]),
+    ("SOCIAL MEDIA TRANSACTIONAL HOURS", lambda row: (row["S. Media Volume Forecast"] * row["S. Media AHT"] / 3600) / row["S. Media Concurrency"] if row["S. Media Concurrency"] else 0),
     ("SOCIAL MEDIA PRODUCTIVE HOURS", lambda row: row["S. Media Handled"])
 ]
 # Totales
@@ -258,73 +190,26 @@ metrics += [
     ("OutOffice Shrinkage (Hr)", lambda row: sum(row[f] for f in input_structure["OUT OFFICE SHRINKAGE"]))
 ]
 
-# Ejecutar cálculos y añadir columnas
 for name, func in metrics:
     df[name] = df.apply(func, axis=1)
 
-# --- 6.1️⃣ Mostrar métricas calculadas por sección justo después de inputs ---
-for section, labels in def_section_metrics.items():
-    if not labels or section not in input_structure:
-        continue
-    st.markdown("---")
-    st.subheader(f"{section} — Calculados")
-    # Header de meses
-    cols = st.columns(len(months)+1)
-    cols[0].write("**Metric**")
-    for i, mes in enumerate(months):
-        cols[i+1].write(f"**{mes}**")
-    # Filas de métricas
-    for lbl in labels:
-        row = st.columns(len(months)+1)
-        row[0].write(lbl)
-        for i, mes in enumerate(months):
-            val = df.at[mes, lbl]
-            row[i+1].write(f"{val:,.2f}")
-
-# --- 7️⃣ Mostrar resultados en UI por sección (antiguo, opcional de dejar) ---
-# (Este bloque podría eliminarse si ya no se necesita)
-# for section, labels in input_structure.items():
-#     if section in def_section_metrics and def_section_metrics[section]:
-#         st.markdown("---")
-#         st.subheader(f"{section} — Calculados")
-#         df_section = df[def_section_metrics[section]].copy()
-#         df_section.index.name = "Month"
-#         st.dataframe(df_section, use_container_width=True)
-# Definir métricas por sección para mostrar inline
+# --- 7️⃣ Mostrar métricas calculadas por sección ---
 def_section_metrics = {
-    "INBOUND ACTIVITY": [
-        "Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)",
-        "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS"
-    ],
-    "OUTGOING ACTIVITY": [
-        "Outgoing Generation %", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS"
-    ],
-    "OUTBOUND ACTIVITY": [
-        "Outbound Closed records", "OUTBOUND TRANSACTIONAL HOURS", "OUTBOUND PRODUCTIVE HOURS"
-    ],
-    "BACKOFFICE ACTIVITY": [
-        "Backoffice Generation %", "BACKOFFICE TRANSACTIONAL HOURS", "BACKOFFICE PRODUCTIVE HOURS"
-    ],
-    "EMAIL ACTIVITY": [
-        "EMAIL TRANSACTIONAL HOURS", "EMAIL PRODUCTIVE HOURS"
-    ],
-    "CHAT ACTIVITY": [
-        "CHAT TRANSACTIONAL HOURS", "CHAT PRODUCTIVE HOURS"
-    ],
-    "SOCIAL MEDIA": [
-        "SOCIAL MEDIA TRANSACTIONAL HOURS", "SOCIAL MEDIA PRODUCTIVE HOURS"
-    ],
-    # Shrinkages y totales opcionales
-    "": []
+    "INBOUND ACTIVITY": ["Offered Calls (#)", "Handled Calls (#)", "Acceptable Calls (#)", "INBOUND TRANSACTIONAL HOURS", "INBOUND PRODUCTIVE HOURS"],
+    "OUTGOING ACTIVITY": ["Outgoing Generation %", "OUTGOING TRANSACTIONAL HOURS", "OUTGOING PRODUCTIVE HOURS"],
+    "OUTBOUND ACTIVITY": ["Outbound Closed records", "OUTBOUND TRANSACTIONAL HOURS", "OUTBOUND PRODUCTIVE HOURS"],
+    "BACKOFFICE ACTIVITY": ["Backoffice Generation %", "BACKOFFICE TRANSACTIONAL HOURS", "BACKOFFICE PRODUCTIVE HOURS"],
+    "EMAIL ACTIVITY": ["EMAIL TRANSACTIONAL HOURS", "EMAIL PRODUCTIVE HOURS"],
+    "CHAT ACTIVITY": ["CHAT TRANSACTIONAL HOURS", "CHAT PRODUCTIVE HOURS"],
+    "SOCIAL MEDIA": ["SOCIAL MEDIA TRANSACTIONAL HOURS", "SOCIAL MEDIA PRODUCTIVE HOURS"]
 }
 
-for section, labels in input_structure.items():
-    if section in def_section_metrics and def_section_metrics[section]:
-        st.markdown("---")
-        st.subheader(f"{section} — Calculados")
-        df_section = df[def_section_metrics[section]].copy()
-        df_section.index.name = "Month"
-        st.dataframe(df_section, use_container_width=True)
+for section, labels in def_section_metrics.items():
+    st.markdown("---")
+    st.subheader(f"{section} — Calculados")
+    df_section = df[labels].copy()
+    df_section.index.name = "Month"
+    st.dataframe(df_section, use_container_width=True)
 
 # --- 8️⃣ Mostrar valores únicos ---
 if single_inputs:
@@ -335,7 +220,7 @@ if single_inputs:
 
 # --- 9️⃣ Exportar CSV ---
 if st.button("📥 Descargar CSV"):
-    csv_data = df.to_csv(index_label="Month").encode('utf-8')
-    st.download_button(label="Descargar CSV", data=csv_data, file_name="budget_results.csv", mime="text/csv")
+    csv_data = df.to_csv(index_label="Month").encode("utf-8")
+    st.download_button("Descargar CSV", data=csv_data, file_name="budget_results.csv", mime="text/csv")
 
 st.success("✅ App lista: estructura y fórmulas completas sin dependencias de Excel.")
