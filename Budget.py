@@ -1,17 +1,16 @@
 import streamlit as st
 import pandas as pd
 
-# Configuración de la página
-st.set_page_config(page_title="Budget Tool — App Independiente", layout="wide")
+# Configuración de la página\ st.set_page_config(page_title="Budget Tool — App Independiente", layout="wide")
 st.title("📊 Budget Tool — App Independiente")
 
 # 1️⃣ Definir meses del año
 months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 ]
 
-# 2️⃣ Definir estructura de entradas por sección
+# 2️⃣ Estructura de entradas por sección
 input_structure = {
     "INBOUND ACTIVITY": [
         "Inbound Client Volume ForeCast",
@@ -148,7 +147,7 @@ input_structure = {
     ]
 }
 
-# 3️⃣ Inicializar diccionarios de inputs
+# 3️⃣ Inicializar inputs mensuales y únicos
 all_inputs = {lbl: [0.0]*len(months) for labels in input_structure.values() for lbl in labels}
 single_inputs = {}
 single_sections = ["CONTRACT/SEAT INFO", "EXPECTED OCCUPIED SEATS", "% SHIFT PATTERNS"]
@@ -165,17 +164,18 @@ for section, labels in input_structure.items():
         for i, mes in enumerate(months):
             cols[i+1].write(f"**{mes}**")
         for lbl in labels:
-            row = st.columns(len(months) + 1)
-            row[0].write(lbl)
+            row_cols = st.columns(len(months) + 1)
+            row_cols[0].write(lbl)
             for i, mes in enumerate(months):
                 key = f"inp_{lbl}_{mes}"
-                val = row[i+1].number_input(label="", value=all_inputs[lbl][i], key=key)
+                val = row_cols[i+1].number_input(label=mes, value=all_inputs[lbl][i], key=key)
                 all_inputs[lbl][i] = val
 
-# 5️⃣ Crear DataFrame de inputs mensuales
-df = pd.DataFrame(all_inputs, index=months)
+# 5️⃣ Crear DataFrame de inputs
+import_structure_df = pd.DataFrame(all_inputs, index=months)
 
-# 6️⃣ Definir métricas y funciones de cálculo
+# 6️⃣ Definir métricas calculadas
+df = import_structure_df.copy()
 metrics = []
 # Inbound
 metrics += [
@@ -205,7 +205,7 @@ metrics += [
 ]
 # Email
 metrics += [
-    ("EMAIL TRANSACTIONAL HOURS", lambda d, i: d.at[months[i], "Email Volume Handled"] * (3600 / d.at[months[i], "Email AHT (Sec)" ]) / 3600),
+    ("EMAIL TRANSACTIONAL HOURS", lambda d, i: d.at[months[i], "Email Volume Handled"] * (3600 / d.at[months[i], "Email AHT (Sec)"]) / 3600),
     ("EMAIL PRODUCTIVE HOURS", lambda d, i: d.at[months[i], "Email Volume Handled"])
 ]
 # Chat
@@ -229,17 +229,18 @@ metrics += [
     ("OutOffice Shrinkage (Hr)", lambda d, i: sum(d.at[months[i], f] for f in input_structure["OUT OFFICE SHRINKAGE"]))
 ]
 
-# 7️⃣ Crear columnas y calcular resultados
+# 7️⃣ Calcular y crear columnas de resultados
 df = pd.DataFrame(all_inputs, index=months)
 for label, func in metrics:
-    df[label] = [func(df, i) if months[i] in df.index else 0 for i in range(len(months))]
+    df[label] = [func(df, i) for i in range(len(months))]
 
-# 8️⃣ Mostrar DataFrame de resultados
+# 8️⃣ Mostrar resultados
 st.markdown("---")
 st.header("📈 Resultados Computados")
 st.dataframe(df, use_container_width=True)
 
-# 9️⃣ Mostrar valores únicos\if single_inputs:
+# 9️⃣ Mostrar valores únicos
+if single_inputs:
     st.markdown("---")
     st.header("📋 Valores Únicos")
     for k, v in single_inputs.items():
