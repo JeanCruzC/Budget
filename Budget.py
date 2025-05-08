@@ -307,7 +307,7 @@ st.write("Offered Calls (#)", f"{metrics['offered_calls']:,}")
 st.write("Handled Calls (#)", f"{metrics['handled_calls']:,}")
 st.write("Acceptable Calls (#)", f"{metrics['acceptable_calls']:,}")
 st.write("Inbound AHT (Sec)", f"{metrics['inbound_aht']:.2f} sec")
-st.write("Inbound POCC (%)", f"{metrics['inbound_pocc']:.2f}%")
+st.write("Inbound POCC (%)", f"{st.session_state.data['inbound_pocc']:.2f}%")
 
 # Productivity Metrics
 st.subheader("Productivity Metrics")
